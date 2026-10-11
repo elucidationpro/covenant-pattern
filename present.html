@@ -26,6 +26,10 @@
   #playBtn{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:15;background:rgba(0,0,0,.35);cursor:pointer}
   #playBtn span{width:120px;height:120px;border-radius:50%;background:#ECE7DC;color:#10151C;display:flex;align-items:center;justify-content:center;font-size:52px;padding-left:10px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
   body.needclick #playBtn{display:flex}
+  /* Older duplicate tabs go to standby so only one screen plays audio. */
+  #standby{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#10151C;z-index:30;color:#ECE7DC;font:500 22px Figtree,system-ui,sans-serif;text-align:center;padding:40px}
+  #standby small{display:block;margin-top:10px;color:#93A0AE;font-size:15px}
+  body.standby #standby{display:flex}
 </style>
 </head>
 <body>
@@ -39,6 +43,7 @@
 <div id="toast"></div>
 <div id="arm"><div>Click anywhere once to enable video and sound<small>Browsers need one click on this screen before the clip can be started from your phone.</small></div></div>
 <div id="playBtn" title="Play clip"><span>&#9654;</span></div>
+<div id="standby"><div>This presenter screen is on standby<small>A newer copy of this page is open in another tab or window. Close this one, or click here to make it the active screen.</small></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
@@ -129,6 +134,7 @@ document.getElementById('board').addEventListener('load', () => {
 /* Video clip (YouTube IFrame API), controlled from the phone or by clicking it here. */
 let player = null, playerReady = false;
 window.onYouTubeIframeAPIReady = function () {
+  if (player) return;
   player = new YT.Player('yt', {
     videoId: VIDEO.id, width: '100%', height: '100%',
     playerVars: { start: VIDEO.start, end: VIDEO.end, controls: 1, rel: 0, modestbranding: 1, playsinline: 1 },
@@ -160,7 +166,21 @@ function tryPlay(restart) {
 }
 document.getElementById('playBtn').addEventListener('click', () => { document.body.classList.remove('needclick'); arm(); try { player.playVideo(); } catch (e) {} });
 
+/* Only one presenter screen per browser: the newest tab is active, older ones stand by. */
+const TAB_ID = Math.random().toString(36).slice(2), bc = 'BroadcastChannel' in window ? new BroadcastChannel('cp-presenter') : null;
+let standby = false;
+function setStandby(on) {
+  standby = on; document.body.classList.toggle('standby', on);
+  if (on && player && player.pauseVideo) try { player.pauseVideo(); } catch (e) {}
+}
+function claim() { setStandby(false); if (bc) bc.postMessage({ type: 'claim', id: TAB_ID }); }
+if (bc) bc.onmessage = e => { if (e.data && e.data.type === 'claim' && e.data.id !== TAB_ID) setStandby(true); };
+claim();
+document.getElementById('standby').addEventListener('click', claim);
+window.addEventListener('pagehide', () => { if (!standby && bc) bc.postMessage({ type: 'closed', id: TAB_ID }); });
+
 function applyVideo(v) {
+  if (standby) { if (v && v.t) videoStamp = v.t; return; }
   if (!v || !v.t || v.t === videoStamp) return;
   videoStamp = v.t;
   if (!playerReady) { setTimeout(() => { videoStamp = 0; applyVideo(v); }, 500); return; }
