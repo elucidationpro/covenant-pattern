@@ -25,7 +25,6 @@
     <div class="modes" role="group" aria-label="Highlight type">
       <button class="mode" id="m-action" data-mode="action" aria-pressed="true"><span class="dot"></span>What we do</button>
       <button class="mode" id="m-promise" data-mode="promise" aria-pressed="false"><span class="dot"></span>What He promises</button>
-      <button class="mode" id="m-erase" data-mode="erase" aria-pressed="false"><span class="dot"></span>Erase</button>
     </div>
     <div class="extras">
       <select id="passage" aria-label="Passage">
@@ -104,7 +103,7 @@ const vbox = $('verses');
 vbox.addEventListener('pointerdown', e => {
   const el = e.target.closest('.w'); if (!el) return;
   const cur = state.marks[el.dataset.id];
-  painting = (state.mode === 'erase' || cur === state.mode) ? 'remove' : 'add';
+  painting = cur === state.mode ? 'remove' : 'add';
   applyTo(el); e.preventDefault();
 });
 window.addEventListener('pointermove', e => {
@@ -126,7 +125,7 @@ window.addEventListener('keydown', e => {
   if (e.target.tagName === 'SELECT') return;
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(1); e.preventDefault(); }
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(-1); e.preventDefault(); }
-  else if (e.key === '1') setMode('action'); else if (e.key === '2') setMode('promise'); else if (e.key === '3' || e.key === 'e') setMode('erase');
+  else if (e.key === '1') setMode('action'); else if (e.key === '2') setMode('promise');
 });
 
 /* Submit: upsert this device's full set of marks (all passages). */
