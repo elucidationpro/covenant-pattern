@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Covenant Pattern — Your Highlights</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;1,400&family=Figtree:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .verses{--vsize:clamp(20px,2.6vw,44px)}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="stage">
+    <div class="ref">
+      <h1 id="ref">Isaiah 51</h1>
+      <span class="hint" id="hint">Tap or drag across words to highlight</span>
+    </div>
+    <div class="verses paintable" id="verses" aria-live="polite"></div>
+  </main>
+  <nav class="bar" aria-label="Controls">
+    <div class="modes" role="group" aria-label="Highlight type">
+      <button class="mode" id="m-action" data-mode="action" aria-pressed="true"><span class="dot"></span>What we do</button>
+      <button class="mode" id="m-promise" data-mode="promise" aria-pressed="false"><span class="dot"></span>What He promises</button>
+      <button class="mode" id="m-erase" data-mode="erase" aria-pressed="false"><span class="dot"></span>Erase</button>
+    </div>
+    <div class="extras">
+      <select id="passage" aria-label="Passage">
+        <option value="isa51">Isaiah 51</option>
+        <option value="isa50">Isaiah 50:10–11</option>
+        <option value="isa54">Isaiah 54:7–14</option>
+      </select>
+      <input type="text" id="name" placeholder="Your name" aria-label="Your name" maxlength="40">
+      <button class="primary" id="submit">Submit highlights</button>
+      <button class="ghost" id="clear">Clear page</button>
+      <span class="status" id="status"></span>
+    </div>
+    <div class="pager">
+      <button class="arrow" id="prev" aria-label="Previous verses">&#8592;</button>
+      <span class="count" id="count">1 / 1</span>
+      <button class="arrow" id="next" aria-label="Next verses">&#8594;</button>
+    </div>
+  </nav>
+</div>
+<div class="verses measure" id="measure" aria-hidden="true"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="shared.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const KEY = 'covenant-pattern-v2';
+const state = { passage: 'isa51', page: 0, mode: 'action', pages: [], marks: {}, name: '', deviceId: '' };
+
+// Restore local work. Each device gets a stable id so re-submitting updates the same row.
+try {
+  const s = JSON.parse(localStorage.getItem(KEY) || '{}');
+  if (s.marks) state.marks = s.marks;
+  if (s.passage && PASSAGES[s.passage]) state.passage = s.passage;
+  if (s.name) state.name = s.name;
+  if (s.deviceId) state.deviceId = s.deviceId;
+} catch (e) {}
+if (!state.deviceId) {
+  state.deviceId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+}
+// Allow preset mode from the link, e.g. highlight.html?mode=promise
+const qsMode = new URLSearchParams(location.search).get('mode');
+if (qsMode === 'promise' || qsMode === 'action') state.mode = qsMode;
+$('name').value = state.name;
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify({ marks: state.marks, passage: state.passage, name: state.name, deviceId: state.deviceId })); } catch (e) {}
+}
+const decorate = id => ({ cls: state.marks[id] || '', style: '' });
+
+function render() {
+  const pg = state.pages[state.page] || [];
+  $('verses').innerHTML = pg.map(v => verseHTML(state.passage, v, decorate)).join('');
+  $('ref').textContent = refLabel(state.passage, pg);
+  $('count').textContent = `${state.page + 1} / ${state.pages.length}`;
+  $('prev').disabled = state.page === 0;
+  $('next').disabled = state.page >= state.pages.length - 1;
+  $('passage').value = state.passage;
+}
+function relayout() {
+  state.pages = paginate(state.passage, $('verses'), $('measure'), decorate);
+  if (state.page > state.pages.length - 1) state.page = Math.max(0, state.pages.length - 1);
+  render();
+}
+
+function setMode(m) { state.mode = m; document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); }
+document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+setMode(state.mode);
+
+/* paint: tap toggles, drag paints a run */
+let painting = null;
+function applyTo(el) {
+  if (!el || !el.classList.contains('w')) return;
+  const id = el.dataset.id; el.classList.remove('action', 'promise');
+  if (painting === 'add') { state.marks[id] = state.mode; el.classList.add(state.mode); }
+  else { delete state.marks[id]; }
+}
+const vbox = $('verses');
+vbox.addEventListener('pointerdown', e => {
+  const el = e.target.closest('.w'); if (!el) return;
+  const cur = state.marks[el.dataset.id];
+  painting = (state.mode === 'erase' || cur === state.mode) ? 'remove' : 'add';
+  applyTo(el); e.preventDefault();
+});
+window.addEventListener('pointermove', e => {
+  if (!painting) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (el && el.closest) applyTo(el.closest('.w'));
+});
+window.addEventListener('pointerup', () => { if (painting) { painting = null; save(); markDirty(); } });
+window.addEventListener('pointercancel', () => { painting = null; });
+
+function go(d) { const n = state.page + d; if (n < 0 || n >= state.pages.length) return; state.page = n; render(); }
+$('prev').onclick = () => go(-1); $('next').onclick = () => go(1);
+$('passage').onchange = e => { state.passage = e.target.value; state.page = 0; save(); relayout(); };
+$('clear').onclick = () => {
+  document.querySelectorAll('#verses .w').forEach(el => { delete state.marks[el.dataset.id]; el.classList.remove('action', 'promise'); });
+  save(); markDirty();
+};
+$('name').addEventListener('input', e => { state.name = e.target.value; save(); });
+
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(-1); e.preventDefault(); }
+  else if (e.key === '1') setMode('action'); else if (e.key === '2') setMode('promise'); else if (e.key === '3' || e.key === 'e') setMode('erase');
+});
+
+/* Submit: upsert this device's full set of marks (all passages). */
+const sb = cpClient();
+function setStatus(msg, cls) { const s = $('status'); s.textContent = msg; s.className = 'status' + (cls ? ' ' + cls : ''); }
+function markDirty() { if ($('status').textContent.startsWith('Submitted')) setStatus('Changes not yet submitted'); }
+$('submit').onclick = async () => {
+  const count = Object.keys(state.marks).length;
+  if (!count) { setStatus('Highlight something first', 'err'); return; }
+  $('submit').disabled = true; setStatus('Sending…');
+  const row = { device_id: state.deviceId, name: state.name.trim(), marks: state.marks, updated_at: new Date().toISOString() };
+  const { error } = await sb.from(CP_CONFIG.table).upsert(row, { onConflict: 'device_id' });
+  $('submit').disabled = false;
+  if (error) { setStatus('Could not send: ' + error.message, 'err'); return; }
+  setStatus(`Submitted ${count} word${count === 1 ? '' : 's'} ✓`, 'ok');
+};
+
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(relayout, 120); });
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(relayout);
+relayout();
+</script>
+</body>
+</html>
