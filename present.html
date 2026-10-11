@@ -7,11 +7,12 @@
 <style>
   html,body{height:100%;margin:0;background:#1a1714;overflow:hidden}
   iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
-  #board{visibility:hidden;pointer-events:none}
-  body.board #board{visibility:visible;pointer-events:auto}
-  body.board #deck{visibility:hidden;pointer-events:none}
+  #board,#video{visibility:hidden;pointer-events:none}
+  #video{background:#000}
+  body.board #board,body.video #video{visibility:visible;pointer-events:auto}
+  body.board #deck,body.video #deck{visibility:hidden;pointer-events:none}
   .nav{position:fixed;top:12px;right:14px;display:none;gap:8px;z-index:10}
-  body.board .nav{display:flex}
+  body.board .nav,body.video .nav{display:flex}
   .nav button{font:600 15px Figtree,system-ui,sans-serif;background:rgba(27,36,48,.85);color:#ECE7DC;border:1px solid #2C3846;border-radius:999px;padding:.5em 1em;cursor:pointer}
   .nav button:hover{border-color:#93A0AE}
   #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font:14px system-ui,sans-serif;padding:6px 12px;border-radius:999px;opacity:0;transition:opacity .3s;pointer-events:none}
@@ -21,9 +22,10 @@
 <body>
 <iframe id="deck" src="deck.html" title="Slides"></iframe>
 <iframe id="board" src="index.html" title="Live highlight board"></iframe>
+<div id="video"><div id="yt"></div></div>
 <div class="nav">
-  <button id="back">&#8592; Slide 8</button>
-  <button id="fwd">Slide 9 &#8594;</button>
+  <button id="back">&#8592;</button>
+  <button id="fwd">&#8594;</button>
 </div>
 <div id="toast"></div>
 
@@ -33,85 +35,124 @@
 <script src="notes-data.js"></script>
 <script>
 const SEQ = CP_SEQUENCE.map(s => s.pos);
+const VIDEO = CP_VIDEO;                 // from notes-data.js: { pos, id, start, end }
 const sb = cpClient();
 const deck = document.getElementById('deck');
-let pos = null;            // current position: '1'..'14' or 'board'
-let applying = false;
+let pos = null;                         // '1'..'14' or 'board'
+let hidden = [];                        // positions skipped by next/prev
+let videoStamp = 0;                     // last video command applied
 
 function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 1200); }
+function labelFor(p) { return p === 'board' ? 'Board' : 'Slide ' + p; }
+function neighbor(d) {
+  let i = SEQ.indexOf(pos);
+  while (true) { i += d; if (i < 0 || i >= SEQ.length) return null; if (!hidden.includes(SEQ[i])) return SEQ[i]; }
+}
+function paintNav() {
+  const b = neighbor(-1), f = neighbor(1);
+  document.getElementById('back').textContent = b ? '← ' + labelFor(b) : '←';
+  document.getElementById('fwd').textContent = f ? labelFor(f) + ' →' : '→';
+  document.getElementById('back').disabled = !b; document.getElementById('fwd').disabled = !f;
+}
 
 /* Show a position on screen. */
 function apply(p, { fromRemote = false } = {}) {
   if (!SEQ.includes(p) || p === pos) return;
+  const leavingVideo = pos === VIDEO.pos;
   pos = p;
-  if (p === 'board') { document.body.classList.add('board'); }
-  else {
-    document.body.classList.remove('board');
+  document.body.classList.toggle('board', p === 'board');
+  document.body.classList.toggle('video', p === VIDEO.pos);
+  if (leavingVideo && player && player.pauseVideo) try { player.pauseVideo(); } catch (e) {}
+  if (p !== 'board') {
     try { const w = deck.contentWindow; if (w && w.location.hash !== '#' + p) w.location.hash = '#' + p; } catch (e) {}
   }
-  if (fromRemote) toast(p === 'board' ? 'Live board' : 'Slide ' + p);
+  paintNav();
+  if (fromRemote) toast(labelFor(p));
 }
-
-/* Push a position to the shared control row so the phone stays in sync. */
 async function publish(p) {
   apply(p);
   await sb.from('control').update({ position: p, updated_at: new Date().toISOString() }).eq('id', 1);
 }
-function step(d) {
-  const i = SEQ.indexOf(pos);
-  const n = Math.max(0, Math.min(SEQ.length - 1, i + d));
-  if (n !== i) publish(SEQ[n]);
+function step(d) { const n = neighbor(d); if (n) publish(n); }
+
+function handleKey(e) {
+  if (e.metaKey || e.ctrlKey || e.altKey) return false;
+  const k = e.key;
+  if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) step(1);
+  else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp' || (k === ' ' && e.shiftKey)) step(-1);
+  else if (k === 'Home') publish('1');
+  else if (k === 'End') publish(SEQ[SEQ.length - 1]);
+  else if (k === 'b' || k === 'B') publish('board');
+  else if (/^[1-9]$/.test(k)) publish(k);
+  else return false;
+  e.preventDefault(); e.stopImmediatePropagation();
+  return true;
 }
 
-/* Take over keyboard/click navigation inside the deck so the board sits between 8 and 9. */
+/* Take over keyboard/click navigation inside the deck so the board sits between 8 and 9 and hidden slides are skipped. */
 deck.addEventListener('load', () => {
   const w = deck.contentWindow, d = deck.contentDocument;
-  w.addEventListener('keydown', e => {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const k = e.key;
-    let handled = true;
-    if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) step(1);
-    else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp' || (k === ' ' && e.shiftKey)) step(-1);
-    else if (k === 'Home') publish('1');
-    else if (k === 'End') publish(SEQ[SEQ.length - 1]);
-    else if (k === 'b' || k === 'B') publish('board');
-    else if (/^[1-9]$/.test(k)) publish(k);
-    else handled = false;
-    if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
-  }, true);
+  w.addEventListener('keydown', handleKey, true);
   d.addEventListener('click', e => {
     if (e.button !== 0 || !e.target || e.target.closest('a')) return;
     e.stopImmediatePropagation();
     step(e.clientX < w.innerWidth / 2 ? -1 : 1);
   }, true);
-  // If the deck changes its own slide (swipe, wheel), follow it.
   w.addEventListener('hashchange', () => {
     const m = /^#(\d+)$/.exec(w.location.hash);
     if (m && pos !== 'board' && m[1] !== pos) publish(m[1]);
   });
   load();
 });
-
-document.getElementById('back').onclick = () => publish('8');
-document.getElementById('fwd').onclick = () => publish('9');
-// Keys while the board is showing: only slide-level nav; the board keeps its own arrow keys for verse pages.
+window.addEventListener('keydown', handleKey, true);
+document.getElementById('back').onclick = () => step(-1);
+document.getElementById('fwd').onclick = () => step(1);
 document.getElementById('board').addEventListener('load', () => {
   const w = document.getElementById('board').contentWindow;
   w.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === 'n' || e.key === 'N') { publish('9'); e.preventDefault(); }
-    else if (e.key === 'Backspace' || e.key === 'p' || e.key === 'P') { publish('8'); e.preventDefault(); }
+    if (e.key === 'Enter' || e.key === 'n' || e.key === 'N') { step(1); e.preventDefault(); }
+    else if (e.key === 'Backspace' || e.key === 'p' || e.key === 'P') { step(-1); e.preventDefault(); }
   }, true);
 });
 
+/* Video clip (YouTube IFrame API), controlled from the phone or by clicking it here. */
+let player = null, playerReady = false;
+window.onYouTubeIframeAPIReady = function () {
+  player = new YT.Player('yt', {
+    videoId: VIDEO.id, width: '100%', height: '100%',
+    playerVars: { start: VIDEO.start, end: VIDEO.end, controls: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+    events: { onReady: () => { playerReady = true; }, onStateChange: ev => { if (ev.data === YT.PlayerState.ENDED) toast('Clip finished'); } },
+  });
+};
+(function () { const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s); })();
+document.getElementById('video').style.cssText += ';position:absolute;inset:0';
+document.getElementById('yt').style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+
+function applyVideo(v) {
+  if (!v || !v.t || v.t === videoStamp) return;
+  videoStamp = v.t;
+  if (!playerReady) { setTimeout(() => { videoStamp = 0; applyVideo(v); }, 500); return; }
+  if (pos !== VIDEO.pos) apply(VIDEO.pos, { fromRemote: true });
+  try {
+    if (v.cmd === 'play') player.playVideo();
+    else if (v.cmd === 'pause') player.pauseVideo();
+    else if (v.cmd === 'restart') { player.seekTo(VIDEO.start, true); player.playVideo(); }
+  } catch (e) {}
+}
+
 /* Follow the phone remote. */
+function applyRow(row, fromRemote) {
+  if (!row) return;
+  if (Array.isArray(row.hidden)) { hidden = row.hidden.map(String); paintNav(); }
+  if (row.position) apply(row.position, { fromRemote });
+  applyVideo(row.video);
+}
 async function load() {
-  const { data } = await sb.from('control').select('position').eq('id', 1).single();
-  if (data && data.position) apply(data.position, { fromRemote: true });
+  const { data } = await sb.from('control').select('position,hidden,video').eq('id', 1).single();
+  if (data) { if (!videoStamp && data.video && data.video.t) videoStamp = data.video.t; applyRow(data, true); }
 }
 sb.channel('control-live')
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'control' }, payload => {
-    if (payload.new && payload.new.position) apply(payload.new.position, { fromRemote: true });
-  })
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'control' }, payload => applyRow(payload.new, true))
   .subscribe();
 setInterval(load, 3000);
 </script>

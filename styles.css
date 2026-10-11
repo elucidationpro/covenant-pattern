@@ -19,7 +19,9 @@ body{background:var(--ink);color:var(--text);font-family:var(--ui);overflow:hidd
 .ref{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .ref h1{margin:0;font-family:var(--serif);font-weight:500;font-size:clamp(22px,2.4vw,44px);letter-spacing:.01em;text-wrap:balance}
 .ref .hint{color:var(--muted);font-size:clamp(13px,1.1vw,20px)}
-.verses{flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(12px,2.4vh,30px);font-family:var(--serif);font-size:var(--vsize,clamp(24px,2.9vw,56px));line-height:1.5;max-width:58ch;user-select:none;-webkit-user-select:none;touch-action:none}
+.verses{--vgap:clamp(12px,2.4vh,30px);flex:1;min-height:0;display:flex;flex-direction:column;gap:var(--vgap);font-family:var(--serif);font-size:var(--vsize,clamp(24px,2.9vw,56px));line-height:1.5;max-width:58ch;user-select:none;-webkit-user-select:none;touch-action:none}
+.verses.cols{flex-direction:row;align-items:flex-start;column-gap:clamp(32px,4vw,80px);max-width:none;font-size:var(--vsize,clamp(22px,2.2vw,44px))}
+.verses.cols .col{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--vgap)}
 .verse{margin:0}
 .vn{font-family:var(--ui);font-weight:700;font-size:.55em;color:var(--muted);vertical-align:.45em;margin-right:.35em}
 .w{border-radius:.18em;padding:.02em 0;transition:background-color .25s,color .25s;box-decoration-break:clone;-webkit-box-decoration-break:clone}

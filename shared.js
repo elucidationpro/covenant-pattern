@@ -58,29 +58,48 @@ window.verseHTML = function (p, [n, text], decorate) {
   }).join('') + '</p>';
 };
 
-/* Fit as many whole verses as the box holds. Returns array of pages (arrays of verses). */
-window.paginate = function (passageKey, box, meas, decorate) {
+/* Two columns on wide screens (TV / laptop), one on phones. */
+window.colsFor = function (box) {
+  return box.clientWidth > 1000 && box.clientWidth / Math.max(1, box.clientHeight) > 1.4 ? 2 : 1;
+};
+
+/* Fit as many whole verses as the box holds. Returns pages; each page is an array of columns, each column an array of verses. */
+window.paginate = function (passageKey, box, meas, decorate, cols) {
+  cols = cols || 1;
   const P = window.PASSAGES[passageKey];
-  meas.style.width = box.clientWidth + 'px';
+  const cs = getComputedStyle(box);
+  const gap = parseFloat(cs.getPropertyValue('--vgap')) || parseFloat(cs.rowGap) || 0;
+  const colGap = cols > 1 ? (parseFloat(cs.columnGap) || 0) : 0;
+  const colW = (box.clientWidth - colGap * (cols - 1)) / cols;
+  meas.style.width = colW + 'px';
+  meas.style.fontSize = cs.fontSize;
   const avail = box.clientHeight;
-  const gap = parseFloat(getComputedStyle(box).rowGap) || 0;
-  const pages = []; let cur = [], h = 0;
+  const pages = []; let page = [], cur = [], h = 0;
+  const closeCol = () => { if (cur.length) page.push(cur); cur = []; h = 0; if (page.length >= cols) { pages.push(page); page = []; } };
   meas.innerHTML = '';
   P.verses.forEach(v => {
     meas.innerHTML = window.verseHTML(passageKey, v, decorate);
     const vh = meas.firstChild.getBoundingClientRect().height;
     const add = cur.length ? vh + gap : vh;
-    if (cur.length && h + add > avail) { pages.push(cur); cur = [v]; h = vh; }
-    else { cur.push(v); h += add; }
+    if (cur.length && h + add > avail) closeCol();
+    cur.push(v); h += (cur.length > 1 ? vh + gap : vh);
   });
-  if (cur.length) pages.push(cur);
+  if (cur.length) page.push(cur);
+  if (page.length) pages.push(page);
   meas.innerHTML = '';
   return pages;
 };
 
-window.refLabel = function (passageKey, pg) {
+window.pageHTML = function (passageKey, page, decorate) {
+  const col = vs => vs.map(v => window.verseHTML(passageKey, v, decorate)).join('');
+  if (page.length <= 1) return col(page[0] || []);
+  return page.map(vs => `<div class="col">${col(vs)}</div>`).join('');
+};
+
+window.refLabel = function (passageKey, page) {
   const P = window.PASSAGES[passageKey];
-  const a = pg[0]?.[0], b = pg[pg.length - 1]?.[0];
+  const vs = [].concat(...page);
+  const a = vs[0]?.[0], b = vs[vs.length - 1]?.[0];
   return `${P.title}${a ? ':' + a + (b !== a ? '–' + b : '') : ''}`;
 };
 

@@ -11,24 +11,38 @@
   :root{--ink:#121820;--panel:#1B2430;--line:#2C3846;--text:#ECE7DC;--muted:#93A0AE;--accent:#F2B33D;--promise:#78C2F0;--action:#5EC76E;color-scheme:dark}
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--ink);color:var(--text);font-family:Figtree,system-ui,sans-serif}
-  body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  html{scroll-padding-top:70px;scroll-padding-bottom:130px}
+  body{padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))}
   header{position:sticky;top:0;background:var(--ink);padding:14px 16px 10px;border-bottom:1px solid var(--line);z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
   header h1{margin:0;font:500 18px Spectral,Georgia,serif}
-  header .now{color:var(--muted);font-size:13px}
+  header .now{color:var(--muted);font-size:13px;text-align:right}
   header .now.err{color:#F08A8A}
   .list{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
-  .slide{width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:var(--text);cursor:pointer;font:inherit}
-  .slide:active{transform:scale(.995)}
+  .slide{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:var(--text)}
   .slide.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(242,179,61,.35) inset}
   .slide.board{border-style:dashed}
   .slide.board.on{border-style:solid}
+  .slide.hidden-slide{opacity:.5}
+  .slide.hidden-slide.on{opacity:.85}
+  .tap{cursor:pointer}
+  .tap:active{opacity:.8}
   .top{display:flex;align-items:baseline;gap:10px}
-  .num{font-weight:700;font-size:12px;color:var(--muted);min-width:2.2em;letter-spacing:.04em}
+  .num{font-weight:700;font-size:12px;color:var(--muted);min-width:2.2em;letter-spacing:.04em;white-space:nowrap}
   .slide.on .num{color:var(--accent)}
   .label{font:500 16px Spectral,Georgia,serif;flex:1}
-  .notes{margin:8px 0 0;color:#C9C3B6;font-size:14px;line-height:1.45;white-space:pre-wrap}
+  .time{margin-top:3px;color:var(--accent);font-size:12.5px;font-style:italic;opacity:.9}
+  .notes{margin:8px 0 0;padding-left:18px;color:#C9C3B6;font-size:14px;line-height:1.45}
+  .notes li{margin:3px 0}
   .notes:empty{display:none}
-  .bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center;justify-content:space-between}
+  .intro{margin:10px 12px 0;padding:10px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px;line-height:1.45}
+  .intro p{margin:2px 0}
+  .tools{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .tools button{font:600 13px Figtree,system-ui,sans-serif;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:.45em .9em;cursor:pointer}
+  .tools button.play{color:var(--text);border-color:var(--muted)}
+  .toggle{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:0 2px 8px}
+  .toggle input{width:16px;height:16px;accent-color:var(--accent);margin:0}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:8px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+  .bar .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
   .bar button{font:600 16px Figtree,system-ui,sans-serif;background:transparent;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:.7em 1.3em;cursor:pointer}
   .bar button.big{flex:1;background:var(--text);color:var(--ink);border-color:var(--text)}
   .bar button:disabled{opacity:.4}
@@ -40,11 +54,15 @@
   <h1>Walk in the Light of Your Fire</h1>
   <span class="now" id="now">Connecting…</span>
 </header>
+<div class="intro" id="intro"></div>
 <div class="list" id="list"></div>
 <div class="bar">
-  <button id="prev" aria-label="Previous">&#8592;</button>
-  <span class="pos" id="posLabel"></span>
-  <button class="big" id="next">Next &#8594;</button>
+  <label class="toggle"><input type="checkbox" id="showHidden"> Show hidden slides <span id="hiddenCount"></span></label>
+  <div class="row">
+    <button id="prev" aria-label="Previous">&#8592;</button>
+    <span class="pos" id="posLabel"></span>
+    <button class="big" id="next">Next &#8594;</button>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -54,49 +72,94 @@
 <script>
 const sb = cpClient();
 const SEQ = CP_SEQUENCE.map(s => s.pos);
-let pos = null;
+const VIDEO = CP_VIDEO;
+let pos = null, hidden = [], showHidden = localStorage.getItem('cp-show-hidden') === '1';
 const list = document.getElementById('list');
+document.getElementById('showHidden').checked = showHidden;
+document.getElementById('intro').innerHTML = (window.CP_INTRO || []).map(l => `<p>${l.replace(/</g, '&lt;')}</p>`).join('');
 
-list.innerHTML = CP_SEQUENCE.map(s => {
-  const num = s.pos === 'board' ? 'BOARD' : 'SLIDE ' + s.pos;
-  return `<button class="slide${s.pos === 'board' ? ' board' : ''}" data-pos="${s.pos}">
-    <div class="top"><span class="num">${num}</span><span class="label">${s.label}</span></div>
-    <p class="notes">${s.notes.replace(/</g, '&lt;')}</p>
-  </button>`;
-}).join('');
+function labelFor(p) { return p === 'board' ? 'the board' : 'slide ' + p; }
+function neighbor(d) {
+  let i = SEQ.indexOf(pos);
+  while (true) { i += d; if (i < 0 || i >= SEQ.length) return null; if (!hidden.includes(SEQ[i])) return SEQ[i]; }
+}
+
+function renderList() {
+  list.innerHTML = CP_SEQUENCE.filter(s => showHidden || !hidden.includes(s.pos)).map(s => {
+    const isHidden = hidden.includes(s.pos);
+    const num = s.pos === 'board' ? 'BOARD' : 'SLIDE ' + s.pos;
+    const video = s.pos === VIDEO.pos ? `
+      <button class="play" data-video="play">&#9654; Play clip</button>
+      <button data-video="pause">&#10074;&#10074; Pause</button>
+      <button data-video="restart">&#8635; Restart</button>` : '';
+    const esc = t => t.replace(/</g, '&lt;');
+    return `<div class="slide${s.pos === 'board' ? ' board' : ''}${isHidden ? ' hidden-slide' : ''}" data-pos="${s.pos}">
+      <div class="tap" data-go="${s.pos}">
+        <div class="top"><span class="num">${num}${isHidden ? ' · HIDDEN' : ''}</span><span class="label">${esc(s.label)}</span></div>
+        ${s.time ? `<div class="time">${esc(s.time)}</div>` : ''}
+        <ul class="notes">${(s.bullets || []).map(b => `<li>${esc(b)}</li>`).join('')}</ul>
+      </div>
+      <div class="tools">${video}<button data-hide="${s.pos}">${isHidden ? 'Unhide' : 'Hide'}</button></div>
+    </div>`;
+  }).join('');
+  paint(false);
+}
 
 function paint(scroll) {
   document.querySelectorAll('.slide').forEach(el => el.classList.toggle('on', el.dataset.pos === pos));
-  const i = SEQ.indexOf(pos);
   document.getElementById('posLabel').textContent = pos === 'board' ? 'Board' : (pos ? `Slide ${pos}` : '');
-  document.getElementById('prev').disabled = i <= 0;
-  document.getElementById('next').disabled = i >= SEQ.length - 1;
+  document.getElementById('prev').disabled = !neighbor(-1);
+  document.getElementById('next').disabled = !neighbor(1);
+  document.getElementById('hiddenCount').textContent = hidden.length ? `(${hidden.length})` : '';
   if (scroll) { const el = document.querySelector('.slide.on'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
 }
-function setNow(msg, err) { const n = document.getElementById('now'); n.textContent = msg; n.className = 'now' + (err ? ' err' : ''); }
+let msgAt = 0;
+function setNow(msg, err, sticky) { const n = document.getElementById('now'); n.textContent = msg; n.className = 'now' + (err ? ' err' : ''); if (sticky) msgAt = Date.now(); }
 
 async function go(p) {
   if (!SEQ.includes(p)) return;
   pos = p; paint(false);
   setNow('Sending…');
   const { error } = await sb.from('control').update({ position: p, updated_at: new Date().toISOString() }).eq('id', 1);
-  if (error) setNow('Not sent: ' + error.message, true); else setNow('Screen is on ' + (p === 'board' ? 'the board' : 'slide ' + p));
+  if (error) setNow('Not sent: ' + error.message, true); else setNow('Screen is on ' + labelFor(p));
 }
-list.addEventListener('click', e => { const b = e.target.closest('.slide'); if (b) go(b.dataset.pos); });
-document.getElementById('prev').onclick = () => { const i = SEQ.indexOf(pos); if (i > 0) go(SEQ[i - 1]); };
-document.getElementById('next').onclick = () => { const i = SEQ.indexOf(pos); if (i < SEQ.length - 1) go(SEQ[i + 1]); };
+async function saveHidden() {
+  renderList();
+  const { error } = await sb.from('control').update({ hidden, updated_at: new Date().toISOString() }).eq('id', 1);
+  if (error) setNow('Not saved: ' + error.message, true);
+}
+async function video(cmd) {
+  if (pos !== VIDEO.pos) { pos = VIDEO.pos; paint(false); }
+  setNow('Sending…');
+  const { error } = await sb.from('control').update({ position: VIDEO.pos, video: { cmd, t: Date.now() }, updated_at: new Date().toISOString() }).eq('id', 1);
+  if (error) setNow('Not sent: ' + error.message, true); else setNow({ play: 'Playing clip', pause: 'Clip paused', restart: 'Restarted clip' }[cmd], false, true);
+}
 
+list.addEventListener('click', e => {
+  const h = e.target.closest('[data-hide]'); if (h) { const p = h.dataset.hide; hidden = hidden.includes(p) ? hidden.filter(x => x !== p) : hidden.concat(p); saveHidden(); return; }
+  const v = e.target.closest('[data-video]'); if (v) { video(v.dataset.video); return; }
+  const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go);
+});
+document.getElementById('prev').onclick = () => { const n = neighbor(-1); if (n) go(n); };
+document.getElementById('next').onclick = () => { const n = neighbor(1); if (n) go(n); };
+document.getElementById('showHidden').onchange = e => { showHidden = e.target.checked; localStorage.setItem('cp-show-hidden', showHidden ? '1' : '0'); renderList(); };
+
+function applyRow(row, scroll) {
+  let changed = false;
+  if (Array.isArray(row.hidden)) { const h = row.hidden.map(String); if (JSON.stringify(h) !== JSON.stringify(hidden)) { hidden = h; changed = true; } }
+  if (row.position !== pos) { pos = row.position; changed = true; }
+  if (changed) { renderList(); paint(scroll); }
+  if (Date.now() - msgAt > 4000) setNow('Screen is on ' + labelFor(pos));
+}
 async function load(scroll) {
-  const { data, error } = await sb.from('control').select('position').eq('id', 1).single();
+  const { data, error } = await sb.from('control').select('position,hidden').eq('id', 1).single();
   if (error) { setNow('Offline: ' + error.message, true); return; }
-  if (data.position !== pos) { pos = data.position; paint(scroll); }
-  setNow('Screen is on ' + (pos === 'board' ? 'the board' : 'slide ' + pos));
+  applyRow(data, scroll);
 }
 sb.channel('control-notes')
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'control' }, payload => {
-    if (payload.new && payload.new.position !== pos) { pos = payload.new.position; paint(true); setNow('Screen is on ' + (pos === 'board' ? 'the board' : 'slide ' + pos)); }
-  })
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'control' }, payload => applyRow(payload.new, true))
   .subscribe();
+renderList();
 load(true);
 setInterval(() => load(false), 4000);
 </script>

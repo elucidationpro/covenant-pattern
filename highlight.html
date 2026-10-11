@@ -74,7 +74,7 @@ const decorate = id => ({ cls: state.marks[id] || '', style: '' });
 
 function render() {
   const pg = state.pages[state.page] || [];
-  $('verses').innerHTML = pg.map(v => verseHTML(state.passage, v, decorate)).join('');
+  $('verses').innerHTML = pageHTML(state.passage, pg, decorate);
   $('ref').textContent = refLabel(state.passage, pg);
   $('count').textContent = `${state.page + 1} / ${state.pages.length}`;
   $('prev').disabled = state.page === 0;
@@ -82,7 +82,9 @@ function render() {
   $('passage').value = state.passage;
 }
 function relayout() {
-  state.pages = paginate(state.passage, $('verses'), $('measure'), decorate);
+  const box = $('verses'), cols = colsFor(box);
+  box.classList.toggle('cols', cols > 1);
+  state.pages = paginate(state.passage, box, $('measure'), decorate, cols);
   if (state.page > state.pages.length - 1) state.page = Math.max(0, state.pages.length - 1);
   render();
 }
