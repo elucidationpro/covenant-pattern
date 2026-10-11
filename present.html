@@ -166,18 +166,20 @@ function tryPlay(restart) {
 }
 document.getElementById('playBtn').addEventListener('click', () => { document.body.classList.remove('needclick'); arm(); try { player.playVideo(); } catch (e) {} });
 
-/* Only one presenter screen per browser: the newest tab is active, older ones stand by. */
-const TAB_ID = Math.random().toString(36).slice(2), bc = 'BroadcastChannel' in window ? new BroadcastChannel('cp-presenter') : null;
+/* Only one presenter screen anywhere: the most recently opened copy is active; every other copy (any browser or device) stands by. */
+const TAB_ID = Math.random().toString(36).slice(2);
 let standby = false;
 function setStandby(on) {
+  if (on === standby) return;
   standby = on; document.body.classList.toggle('standby', on);
   if (on && player && player.pauseVideo) try { player.pauseVideo(); } catch (e) {}
 }
-function claim() { setStandby(false); if (bc) bc.postMessage({ type: 'claim', id: TAB_ID }); }
-if (bc) bc.onmessage = e => { if (e.data && e.data.type === 'claim' && e.data.id !== TAB_ID) setStandby(true); };
+async function claim() {
+  setStandby(false);
+  await sb.from('control').update({ screen: TAB_ID }).eq('id', 1);
+}
 claim();
 document.getElementById('standby').addEventListener('click', claim);
-window.addEventListener('pagehide', () => { if (!standby && bc) bc.postMessage({ type: 'closed', id: TAB_ID }); });
 
 function applyVideo(v) {
   if (standby) { if (v && v.t) videoStamp = v.t; return; }
@@ -194,12 +196,13 @@ function applyVideo(v) {
 /* Follow the phone remote. */
 function applyRow(row, fromRemote) {
   if (!row) return;
+  if (row.screen && row.screen !== TAB_ID) setStandby(true);
   if (Array.isArray(row.hidden)) { hidden = row.hidden.map(String); paintNav(); }
   if (row.position) apply(row.position, { fromRemote });
   applyVideo(row.video);
 }
 async function load() {
-  const { data } = await sb.from('control').select('position,hidden,video').eq('id', 1).single();
+  const { data } = await sb.from('control').select('position,hidden,video,screen').eq('id', 1).single();
   // Ignore video commands older than 20s on first load (so a reload doesn't replay), but honor a fresh one.
   if (data) { if (!videoStamp && data.video && data.video.t && Date.now() - data.video.t > 20000) videoStamp = data.video.t; applyRow(data, true); }
 }
