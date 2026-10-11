@@ -33,7 +33,6 @@
         <option value="isa50">Isaiah 50:10–11</option>
         <option value="isa54">Isaiah 54:7–14</option>
       </select>
-      <input type="text" id="name" placeholder="Your name" aria-label="Your name" maxlength="40">
       <button class="primary" id="submit">Submit highlights</button>
       <button class="ghost" id="clear">Clear page</button>
       <span class="status" id="status"></span>
@@ -53,14 +52,13 @@
 <script>
 const $ = id => document.getElementById(id);
 const KEY = 'covenant-pattern-v2';
-const state = { passage: 'isa51', page: 0, mode: 'action', pages: [], marks: {}, name: '', deviceId: '' };
+const state = { passage: 'isa51', page: 0, mode: 'action', pages: [], marks: {}, deviceId: '' };
 
 // Restore local work. Each device gets a stable id so re-submitting updates the same row.
 try {
   const s = JSON.parse(localStorage.getItem(KEY) || '{}');
   if (s.marks) state.marks = s.marks;
   if (s.passage && PASSAGES[s.passage]) state.passage = s.passage;
-  if (s.name) state.name = s.name;
   if (s.deviceId) state.deviceId = s.deviceId;
 } catch (e) {}
 if (!state.deviceId) {
@@ -69,10 +67,9 @@ if (!state.deviceId) {
 // Allow preset mode from the link, e.g. highlight.html?mode=promise
 const qsMode = new URLSearchParams(location.search).get('mode');
 if (qsMode === 'promise' || qsMode === 'action') state.mode = qsMode;
-$('name').value = state.name;
 
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify({ marks: state.marks, passage: state.passage, name: state.name, deviceId: state.deviceId })); } catch (e) {}
+  try { localStorage.setItem(KEY, JSON.stringify({ marks: state.marks, passage: state.passage, deviceId: state.deviceId })); } catch (e) {}
 }
 const decorate = id => ({ cls: state.marks[id] || '', style: '' });
 
@@ -125,10 +122,8 @@ $('clear').onclick = () => {
   document.querySelectorAll('#verses .w').forEach(el => { delete state.marks[el.dataset.id]; el.classList.remove('action', 'promise'); });
   save(); markDirty();
 };
-$('name').addEventListener('input', e => { state.name = e.target.value; save(); });
-
 window.addEventListener('keydown', e => {
-  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'SELECT') return;
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(1); e.preventDefault(); }
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(-1); e.preventDefault(); }
   else if (e.key === '1') setMode('action'); else if (e.key === '2') setMode('promise'); else if (e.key === '3' || e.key === 'e') setMode('erase');
@@ -142,7 +137,7 @@ $('submit').onclick = async () => {
   const count = Object.keys(state.marks).length;
   if (!count) { setStatus('Highlight something first', 'err'); return; }
   $('submit').disabled = true; setStatus('Sending…');
-  const row = { device_id: state.deviceId, name: state.name.trim(), marks: state.marks, updated_at: new Date().toISOString() };
+  const row = { device_id: state.deviceId, marks: state.marks, updated_at: new Date().toISOString() };
   const { error } = await sb.from(CP_CONFIG.table).upsert(row, { onConflict: 'device_id' });
   $('submit').disabled = false;
   if (error) { setStatus('Could not send: ' + error.message, 'err'); return; }

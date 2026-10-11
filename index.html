@@ -21,7 +21,6 @@
     <div class="legend">
       <span><i class="sw action"></i>What we do</span>
       <span><i class="sw promise"></i>What He promises</span>
-      <span>Darker = more people<span class="scale" id="scale"></span></span>
     </div>
     <div class="extras">
       <select id="passage" aria-label="Passage">
@@ -79,11 +78,6 @@ function decorate(id) {
   const a = alphaFor(count);
   return { cls: a > 0.5 ? 'dark' : '', style: `background:rgba(${CP_COLORS[kind].rgb},${a.toFixed(2)})` };
 }
-function renderScale() {
-  const steps = [1, 2, 3, 4, 5, 6];
-  $('scale').innerHTML = steps.map(c => `<i style="background:rgba(${CP_COLORS.action.rgb},${alphaFor(c).toFixed(2)})"></i>`).join('');
-}
-
 function render() {
   const pg = state.pages[state.page] || [];
   $('verses').innerHTML = pg.map(v => verseHTML(state.passage, v, decorate)).join('');
@@ -92,11 +86,9 @@ function render() {
   $('prev').disabled = state.page === 0;
   $('next').disabled = state.page >= state.pages.length - 1;
   $('passage').value = state.passage;
-  const names = state.rows.map(r => (r.name || '').trim()).filter(Boolean);
   $('hint').textContent = submitters
-    ? `${submitters} submission${submitters === 1 ? '' : 's'}${names.length ? ' · ' + names.join(', ') : ''}`
+    ? `${submitters} submission${submitters === 1 ? '' : 's'}`
     : 'Waiting for highlights…';
-  renderScale();
 }
 function relayout() {
   state.pages = paginate(state.passage, $('verses'), $('measure'), null);
@@ -116,7 +108,7 @@ window.addEventListener('keydown', e => {
 /* Data: load everything, then listen for live changes (plus a slow poll as a safety net). */
 const sb = cpClient();
 async function load() {
-  const { data, error } = await sb.from(CP_CONFIG.table).select('device_id,name,marks,updated_at');
+  const { data, error } = await sb.from(CP_CONFIG.table).select('device_id,marks,updated_at');
   if (error) { $('hint').textContent = 'Could not load: ' + error.message; return; }
   state.rows = data || []; rebuildTally(); render();
 }
