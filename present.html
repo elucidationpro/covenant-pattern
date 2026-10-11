@@ -17,6 +17,15 @@
   .nav button:hover{border-color:#93A0AE}
   #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font:14px system-ui,sans-serif;padding:6px 12px;border-radius:999px;opacity:0;transition:opacity .3s;pointer-events:none}
   #toast.on{opacity:1}
+  /* Shown until the page has been clicked once, which browsers require before video with sound can start remotely. */
+  #arm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:20;cursor:pointer}
+  #arm div{background:#1B2430;color:#ECE7DC;border:1px solid #2C3846;border-radius:16px;padding:22px 30px;font:500 22px Figtree,system-ui,sans-serif;text-align:center;max-width:32em}
+  #arm small{display:block;margin-top:8px;color:#93A0AE;font-size:15px}
+  body.armed #arm{display:none}
+  /* Shown if the browser still refuses to start the clip without a click on the video itself. */
+  #playBtn{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:15;background:rgba(0,0,0,.35);cursor:pointer}
+  #playBtn span{width:120px;height:120px;border-radius:50%;background:#ECE7DC;color:#10151C;display:flex;align-items:center;justify-content:center;font-size:52px;padding-left:10px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  body.needclick #playBtn{display:flex}
 </style>
 </head>
 <body>
@@ -28,6 +37,8 @@
   <button id="fwd">&#8594;</button>
 </div>
 <div id="toast"></div>
+<div id="arm"><div>Click anywhere once to enable video and sound<small>Browsers need one click on this screen before the clip can be started from your phone.</small></div></div>
+<div id="playBtn" title="Play clip"><span>&#9654;</span></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
@@ -121,12 +132,33 @@ window.onYouTubeIframeAPIReady = function () {
   player = new YT.Player('yt', {
     videoId: VIDEO.id, width: '100%', height: '100%',
     playerVars: { start: VIDEO.start, end: VIDEO.end, controls: 1, rel: 0, modestbranding: 1, playsinline: 1 },
-    events: { onReady: () => { playerReady = true; }, onStateChange: ev => { if (ev.data === YT.PlayerState.ENDED) toast('Clip finished'); } },
+    events: { onReady: () => { playerReady = true; }, onStateChange: ev => { if (ev.data === YT.PlayerState.PLAYING) document.body.classList.remove('needclick'); if (ev.data === YT.PlayerState.ENDED) toast('Clip finished'); } },
   });
 };
 (function () { const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s); })();
 document.getElementById('video').style.cssText += ';position:absolute;inset:0';
 document.getElementById('yt').style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+
+/* One click arms the page (user activation) so remote play with sound is allowed. */
+function armed() { return document.body.classList.contains('armed'); }
+function arm() { document.body.classList.add('armed'); }
+if (navigator.userActivation && navigator.userActivation.hasBeenActive) arm();
+['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, arm, true));
+document.getElementById('arm').addEventListener('click', e => { arm(); e.stopPropagation(); });
+deck.addEventListener('load', () => { ['pointerdown', 'keydown'].forEach(ev => deck.contentWindow.addEventListener(ev, arm, true)); });
+document.getElementById('board').addEventListener('load', () => { ['pointerdown', 'keydown'].forEach(ev => document.getElementById('board').contentWindow.addEventListener(ev, arm, true)); });
+
+let pendingPlay = null;
+function tryPlay(restart) {
+  if (restart) player.seekTo(VIDEO.start, true);
+  player.playVideo();
+  clearTimeout(pendingPlay);
+  pendingPlay = setTimeout(() => {
+    const s = player.getPlayerState();
+    if (s !== YT.PlayerState.PLAYING && s !== YT.PlayerState.BUFFERING) document.body.classList.add('needclick');
+  }, 1500);
+}
+document.getElementById('playBtn').addEventListener('click', () => { document.body.classList.remove('needclick'); arm(); try { player.playVideo(); } catch (e) {} });
 
 function applyVideo(v) {
   if (!v || !v.t || v.t === videoStamp) return;
@@ -134,12 +166,11 @@ function applyVideo(v) {
   if (!playerReady) { setTimeout(() => { videoStamp = 0; applyVideo(v); }, 500); return; }
   if (pos !== VIDEO.pos) apply(VIDEO.pos, { fromRemote: true });
   try {
-    if (v.cmd === 'play') player.playVideo();
-    else if (v.cmd === 'pause') player.pauseVideo();
-    else if (v.cmd === 'restart') { player.seekTo(VIDEO.start, true); player.playVideo(); }
+    if (v.cmd === 'play') tryPlay(false);
+    else if (v.cmd === 'restart') tryPlay(true);
+    else if (v.cmd === 'pause') { clearTimeout(pendingPlay); document.body.classList.remove('needclick'); player.pauseVideo(); }
   } catch (e) {}
 }
-
 /* Follow the phone remote. */
 function applyRow(row, fromRemote) {
   if (!row) return;
@@ -149,7 +180,8 @@ function applyRow(row, fromRemote) {
 }
 async function load() {
   const { data } = await sb.from('control').select('position,hidden,video').eq('id', 1).single();
-  if (data) { if (!videoStamp && data.video && data.video.t) videoStamp = data.video.t; applyRow(data, true); }
+  // Ignore video commands older than 20s on first load (so a reload doesn't replay), but honor a fresh one.
+  if (data) { if (!videoStamp && data.video && data.video.t && Date.now() - data.video.t > 20000) videoStamp = data.video.t; applyRow(data, true); }
 }
 sb.channel('control-live')
   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'control' }, payload => applyRow(payload.new, true))
