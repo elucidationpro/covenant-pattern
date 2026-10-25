@@ -207,6 +207,7 @@ window.cpControl = function (sb) {
         device_id: CP_CONTROL_IDS[key], lesson: LESSON.slug,
         marks: { value }, updated_at: new Date().toISOString(),
       }));
+      if (!rows.length) return { error: new Error('No supported control fields. Refresh this page.') };
       return sb.from(CP_CONFIG.table).upsert(rows, { onConflict: 'device_id,lesson' });
     },
     subscribe(name, reload) {

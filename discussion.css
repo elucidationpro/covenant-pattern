@@ -28,11 +28,11 @@ body.board .discussion-slide,body.video .discussion-slide{visibility:hidden;poin
 .discussion-slide.title.has-bg h1,.discussion-slide.title.has-bg .subtitle{text-shadow:0 2px 18px rgba(0,0,0,.6)}
 .discussion-slide.title.dark-text h1,.discussion-slide.title.dark-text .subtitle{color:#1B2430;text-shadow:0 1px 18px rgba(255,255,255,.35)}
 .discussion-slide.title.dark-text::after{display:none}
-/* The artwork overlaps the copy region only along its transparent inner edge. */
+/* Split-slide artwork fades to transparent at the midpoint; copy stays in its own half. */
 .discussion-slide.has-image{padding:0}
-.discussion-slide .slide-image{position:absolute;top:0;width:1152px;height:1080px;max-height:none;object-fit:cover}
-.discussion-slide.image-right .slide-image{right:0;mask-image:linear-gradient(to right,transparent,#000 40%);-webkit-mask-image:linear-gradient(to right,transparent,#000 40%)}
-.discussion-slide.image-left .slide-image{left:0;mask-image:linear-gradient(to left,transparent,#000 40%);-webkit-mask-image:linear-gradient(to left,transparent,#000 40%)}
-.discussion-slide .slide-copy{position:relative;z-index:1;width:864px;display:flex;flex-direction:column;gap:32px}
+.discussion-slide .slide-image{position:absolute;top:0;width:960px;height:1080px;max-height:none;object-fit:cover}
+.discussion-slide.image-right .slide-image{right:0;mask-image:linear-gradient(to right,transparent,#000 35%);-webkit-mask-image:linear-gradient(to right,transparent,#000 35%)}
+.discussion-slide.image-left .slide-image{left:0;mask-image:linear-gradient(to left,transparent,#000 35%);-webkit-mask-image:linear-gradient(to left,transparent,#000 35%)}
+.discussion-slide .slide-copy{position:relative;z-index:1;width:760px;display:flex;flex-direction:column;gap:32px}
 .discussion-slide.image-right .slide-copy{margin-left:140px}
-.discussion-slide.image-left .slide-copy{margin-left:916px}
+.discussion-slide.image-left .slide-copy{margin-left:1020px}

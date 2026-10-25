@@ -78,6 +78,7 @@
   <label class="toggle"><input type="checkbox" id="showHidden"> Show hidden slides <span id="hiddenCount"></span></label>
   <div id="boardPaging" class="row" style="margin-bottom:8px" hidden>
     <button id="boardPrev">← Previous verses</button>
+    <span id="boardPageLabel" class="pos" aria-live="polite"></span>
     <button id="boardNext">Next verses →</button>
   </div>
   <div class="row">
@@ -90,7 +91,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js"></script>
+<script src="shared.js?v=20261025-2"></script>
 <script>
 cpReady.then(() => {
 const sb = cpClient();
@@ -152,7 +153,12 @@ function renderList() {
   paint(false);
 }
 
+let boardState = { page: 0, pages: 0 };
+let boardSending = false;
 function paint(scroll) {
+  document.getElementById('boardPrev').disabled = boardSending || boardState.page <= 0;
+  document.getElementById('boardNext').disabled = boardSending || boardState.page >= boardState.pages - 1;
+  document.getElementById('boardPageLabel').textContent = boardState.pages ? `${boardState.page + 1} / ${boardState.pages}` : '…';
   document.getElementById('boardPaging').hidden = pos !== 'board';
   document.querySelectorAll('.slide').forEach(el => {
     el.classList.toggle('on', el.dataset.pos === pos);
@@ -194,8 +200,17 @@ list.addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go);
 });
 async function pageBoard(direction) {
-  const { error } = await control.update({ board: { direction, t: Date.now() } });
-  if (error) setNow('Not sent: ' + error.message, true);
+  if (boardSending) return;
+  boardSending = true;
+  paint(false);
+  setNow('Sending verse page…');
+  const page = Math.max(0, Math.min(boardState.page + direction, boardState.pages - 1));
+  const next = { ...boardState, page };
+  const { error } = await control.update({ board: next });
+  boardSending = false;
+  if (error) setNow('Not sent: ' + error.message, true, true);
+  else { boardState = next; setNow(`Verse page ${page + 1} sent`, false, true); }
+  paint(false);
 }
 document.getElementById('boardPrev').onclick = () => pageBoard(-1);
 document.getElementById('boardNext').onclick = () => pageBoard(1);
@@ -205,6 +220,10 @@ document.getElementById('showHidden').onchange = e => { showHidden = e.target.ch
 
 function applyRow(row, scroll) {
   let changed = false;
+  if (!boardSending && Number.isInteger(row.board?.page) && row.board?.pages > 0) {
+    boardState = row.board;
+    paint(false);
+  }
   if (Array.isArray(row.hidden)) { const h = row.hidden.map(String); if (JSON.stringify(h) !== JSON.stringify(hidden)) { hidden = h; changed = true; } }
   if (SEQ.includes(row.position) && row.position !== pos) { pos = row.position; changed = true; }
   if (changed) { renderList(); paint(scroll); }

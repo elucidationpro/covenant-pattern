@@ -62,7 +62,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js"></script>
+<script src="shared.js?v=20261025-2"></script>
 <script>
 cpReady.then(() => {
 const $ = id => document.getElementById(id);
@@ -132,7 +132,24 @@ function relayout() {
   render();
 }
 
-function go(d) { const n = state.page + d; if (n < 0 || n >= state.pages.length) return; state.page = n; render(); }
+// Explicit API for the presenter: independent of keyboard focus and event timing.
+window.cpBoardState = () => ({ page: state.page, pages: state.pages.length });
+window.cpSetBoardPage = page => {
+  if (!Number.isInteger(page) || !state.pages.length) return;
+  state.page = Math.max(0, Math.min(page, state.pages.length - 1));
+  render();
+};
+function reportBoardPage() {
+  if (window.parent !== window && typeof window.parent.cpBoardChanged === 'function') {
+    window.parent.cpBoardChanged(window.cpBoardState());
+  }
+}
+function go(d) {
+  const n = state.page + d;
+  if (n < 0 || n >= state.pages.length) return;
+  window.cpSetBoardPage(n);
+  reportBoardPage();
+}
 $('prev').onclick = () => go(-1); $('next').onclick = () => go(1);
 $('passage').onchange = e => { state.passage = e.target.value; state.page = 0; relayout(); };
 window.addEventListener('keydown', e => {
