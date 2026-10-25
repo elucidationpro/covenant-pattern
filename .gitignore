@@ -1,1 +1,4 @@
 .DS_Store
+
+# Licensed artwork: local only, never pushed
+weeks/*/img/local/

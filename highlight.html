@@ -9,32 +9,43 @@
 <link rel="stylesheet" href="styles.css">
 <style>
   .verses{--vsize:clamp(20px,2.6vw,44px)}
-  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .app{height:100dvh}
+  .view-header{position:sticky;top:0;z-index:2;flex:none;background:var(--ink);border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+  .view-toggle{display:flex;max-width:440px;margin:auto;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+  .view-toggle button{flex:1;justify-content:center;min-height:44px;border-color:transparent}
+  .view-toggle button[aria-pressed=true]{background:var(--text);color:var(--on-hi)}
+  #highlightPanel,#groupPanel{flex:1;min-height:0;display:flex;flex-direction:column}
+  #highlightPanel[hidden],#groupPanel[hidden]{display:none}
+  #groupPreview{width:100%;flex:1;min-height:0;border:0}
+  .stage{padding-left:max(clamp(16px,5vw,96px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,5vw,96px),env(safe-area-inset-right,0px))}
+  .bar{padding-left:max(clamp(16px,3vw,40px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,3vw,40px),env(safe-area-inset-right,0px))}
+  .switch-live{background:rgb(242,196,92);color:#10151C;border-color:transparent}
+  .back-bar{display:flex;justify-content:center;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:var(--panel);border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
 <div class="app">
+  <header class="view-header">
+    <div class="view-toggle" role="group" aria-label="Participant view">
+      <button id="highlightTab" aria-pressed="true" aria-controls="highlightPanel">Highlight</button>
+      <button id="groupTab" aria-pressed="false" aria-controls="groupPanel">Live view</button>
+    </div>
+  </header>
+  <div id="highlightPanel">
   <main class="stage">
     <div class="ref">
-      <h1 id="ref">Isaiah 51</h1>
+      <h1 id="ref"></h1>
       <span class="hint" id="hint">Tap or drag across words to highlight</span>
     </div>
     <div class="verses paintable" id="verses" aria-live="polite"></div>
   </main>
   <nav class="bar" aria-label="Controls">
-    <div class="modes" role="group" aria-label="Highlight type">
-      <button class="mode" id="m-action" data-mode="action" aria-pressed="true"><span class="dot"></span>What we do</button>
-      <button class="mode" id="m-promise" data-mode="promise" aria-pressed="false"><span class="dot"></span>What He promises</button>
-    </div>
+    <div class="modes" role="group" aria-label="Highlight type"></div>
     <div class="extras">
-      <select id="passage" aria-label="Passage">
-        <option value="isa51">Isaiah 51</option>
-        <option value="isa50">Isaiah 50:10–11</option>
-        <option value="isa54">Isaiah 54:7–14</option>
-      </select>
-      <button class="primary" id="submit">Submit highlights</button>
+      <select id="passage" aria-label="Passage"></select>
       <button class="ghost" id="clear">Clear page</button>
-      <span class="status" id="status"></span>
+      <span class="status" id="status" role="status"></span>
+      <button class="switch-live" id="toLive">Switch to live view &#8594;</button>
     </div>
     <div class="pager">
       <button class="arrow" id="prev" aria-label="Previous verses">&#8592;</button>
@@ -42,6 +53,11 @@
       <button class="arrow" id="next" aria-label="Next verses">&#8594;</button>
     </div>
   </nav>
+  </div>
+  <section id="groupPanel" aria-label="Live view" hidden>
+    <iframe id="groupPreview" title="Live group highlights (read-only)"></iframe>
+    <div class="back-bar"><button class="switch-live" id="toHighlight">&#8592; Back to highlighting</button></div>
+  </section>
 </div>
 <div class="verses measure" id="measure" aria-hidden="true"></div>
 
@@ -49,14 +65,16 @@
 <script src="config.js"></script>
 <script src="shared.js"></script>
 <script>
+cpReady.then(() => {
 const $ = id => document.getElementById(id);
-const KEY = 'covenant-pattern-v2';
-const state = { passage: 'isa51', page: 0, mode: 'action', pages: [], marks: {}, deviceId: '' };
+const KEY = 'covenant-pattern-v3:' + LESSON.slug;
+const state = { passage: Object.keys(PASSAGES)[0], page: 0, mode: CP_MODES[0], pages: [], marks: {}, deviceId: '', pendingSync: false };
 
-// Restore local work. Each device gets a stable id so re-submitting updates the same row.
+// Restore local work. Each device gets a stable id so each save updates the same row.
 try {
-  const s = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const s = JSON.parse(localStorage.getItem(KEY) || (LESSON.legacyStorageKey && localStorage.getItem(LESSON.legacyStorageKey)) || '{}');
   if (s.marks) state.marks = s.marks;
+  state.pendingSync = s.pendingSync === true;
   if (s.passage && PASSAGES[s.passage]) state.passage = s.passage;
   if (s.deviceId) state.deviceId = s.deviceId;
 } catch (e) {}
@@ -65,11 +83,14 @@ if (!state.deviceId) {
 }
 // Allow preset mode from the link, e.g. highlight.html?mode=promise
 const qsMode = new URLSearchParams(location.search).get('mode');
-if (qsMode === 'promise' || qsMode === 'action') state.mode = qsMode;
+if (CP_MODES.includes(qsMode)) state.mode = qsMode;
 
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify({ marks: state.marks, passage: state.passage, deviceId: state.deviceId })); } catch (e) {}
+  try { localStorage.setItem(KEY, JSON.stringify({ marks: state.marks, passage: state.passage, deviceId: state.deviceId, pendingSync: state.pendingSync })); } catch (e) {}
 }
+save();
+let groupView = false;
+const VIEW_KEY = KEY + ':view';
 const decorate = id => ({ cls: state.marks[id] || '', style: '' });
 
 function render() {
@@ -82,6 +103,7 @@ function render() {
   $('passage').value = state.passage;
 }
 function relayout() {
+  if (groupView) return;
   const box = $('verses'), cols = colsFor(box);
   box.classList.toggle('cols', cols > 1);
   state.pages = paginate(state.passage, box, $('measure'), decorate, cols);
@@ -89,7 +111,7 @@ function relayout() {
   render();
 }
 
-function setMode(m) { state.mode = m; document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); }
+function setMode(m) { if (!CP_MODES.includes(m)) return; state.mode = m; document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); }
 document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 setMode(state.mode);
 
@@ -97,12 +119,16 @@ setMode(state.mode);
 let painting = null;
 function applyTo(el) {
   if (!el || !el.classList.contains('w')) return;
-  const id = el.dataset.id; el.classList.remove('action', 'promise');
+  const id = el.dataset.id;
+  if (painting === 'add' ? state.marks[id] === state.mode : !state.marks[id]) return;
+  el.classList.remove(...CP_MODES);
   if (painting === 'add') { state.marks[id] = state.mode; el.classList.add(state.mode); }
   else { delete state.marks[id]; }
+  save(); markDirty();
 }
 const vbox = $('verses');
 vbox.addEventListener('pointerdown', e => {
+  if (groupView) return;
   const el = e.target.closest('.w'); if (!el) return;
   const cur = state.marks[el.dataset.id];
   painting = cur === state.mode ? 'remove' : 'add';
@@ -113,41 +139,94 @@ window.addEventListener('pointermove', e => {
   const el = document.elementFromPoint(e.clientX, e.clientY);
   if (el && el.closest) applyTo(el.closest('.w'));
 });
-window.addEventListener('pointerup', () => { if (painting) { painting = null; save(); markDirty(); } });
+window.addEventListener('pointerup', () => { painting = null; });
 window.addEventListener('pointercancel', () => { painting = null; });
+
+// Keep the editor mounted so switching views never replaces the local draft.
+// The remote uses this same board preview, including its realtime subscription.
+function setView(group) {
+  painting = null;
+  groupView = group;
+  $('highlightPanel').hidden = group;
+  $('groupPanel').hidden = !group;
+  $('highlightTab').setAttribute('aria-pressed', String(!group));
+  $('groupTab').setAttribute('aria-pressed', String(group));
+  try { sessionStorage.setItem(VIEW_KEY, group ? 'group' : 'highlight'); } catch (e) {}
+  if (group) {
+    const frame = $('groupPreview');
+    if (!frame.getAttribute('src')) {
+      const url = new URL(cpURL('index.html'));
+      url.searchParams.set('view', 'preview');
+      frame.src = url.href;
+    }
+  } else relayout();
+}
+$('highlightTab').onclick = () => setView(false);
+$('groupTab').onclick = () => setView(true);
+$('toLive').onclick = () => setView(true);
+$('toHighlight').onclick = () => setView(false);
 
 function go(d) { const n = state.page + d; if (n < 0 || n >= state.pages.length) return; state.page = n; render(); }
 $('prev').onclick = () => go(-1); $('next').onclick = () => go(1);
 $('passage').onchange = e => { state.passage = e.target.value; state.page = 0; save(); relayout(); };
 $('clear').onclick = () => {
-  document.querySelectorAll('#verses .w').forEach(el => { delete state.marks[el.dataset.id]; el.classList.remove('action', 'promise'); });
+  document.querySelectorAll('#verses .w').forEach(el => { delete state.marks[el.dataset.id]; el.classList.remove(...CP_MODES); });
   save(); markDirty();
 };
 window.addEventListener('keydown', e => {
-  if (e.target.tagName === 'SELECT') return;
+  if (groupView || e.target.closest('.view-toggle') || e.target.tagName === 'SELECT') return;
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(1); e.preventDefault(); }
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(-1); e.preventDefault(); }
-  else if (e.key === '1') setMode('action'); else if (e.key === '2') setMode('promise');
+  else if (e.key === '1') setMode(CP_MODES[0]); else if (e.key === '2') setMode(CP_MODES[1]);
 });
 
-/* Submit: upsert this device's full set of marks (all passages). */
+/* Debounced autosave, serialized so older requests cannot overwrite newer marks. */
 const sb = cpClient();
+let saveTimer, saving = false, revision = 0, savedRevision = 0;
 function setStatus(msg, cls) { const s = $('status'); s.textContent = msg; s.className = 'status' + (cls ? ' ' + cls : ''); }
-function markDirty() { if ($('status').textContent.startsWith('Submitted')) setStatus('Changes not yet submitted'); }
-$('submit').onclick = async () => {
-  const count = Object.keys(state.marks).length;
-  if (!count) { setStatus('Highlight something first', 'err'); return; }
-  $('submit').disabled = true; setStatus('Sending…');
-  const row = { device_id: state.deviceId, marks: state.marks, updated_at: new Date().toISOString() };
-  const { error } = await sb.from(CP_CONFIG.table).upsert(row, { onConflict: 'device_id' });
-  $('submit').disabled = false;
-  if (error) { setStatus('Could not send: ' + error.message, 'err'); return; }
-  setStatus(`Submitted ${count} word${count === 1 ? '' : 's'} ✓`, 'ok');
-};
+function markDirty() {
+  revision++;
+  state.pendingSync = true;
+  save();
+  setStatus('Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushMarks, 400);
+}
+async function flushMarks() {
+  if (saving || savedRevision === revision) return;
+  saving = true;
+  const sendingRevision = revision;
+  const row = { lesson: LESSON.slug, device_id: state.deviceId, marks: { ...state.marks }, updated_at: new Date().toISOString() };
+  try {
+    const { error } = await sb.from(CP_CONFIG.table).upsert(row, { onConflict: 'device_id,lesson' });
+    if (error) throw error;
+    savedRevision = sendingRevision;
+    if (savedRevision === revision) {
+      state.pendingSync = false; save();
+      setStatus('Saved', 'ok');
+    }
+  } catch (error) {
+    setStatus('Not saved. Retrying…', 'err');
+  } finally {
+    saving = false;
+    if (savedRevision !== revision) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(flushMarks, savedRevision === sendingRevision ? 400 : 3000);
+    }
+  }
+}
+window.addEventListener('online', flushMarks);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { clearTimeout(saveTimer); flushMarks(); }
+});
+// Retry unsynced local edits on return, including a previously cleared set of marks.
+if (state.pendingSync) markDirty();
 
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(relayout, 120); });
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(relayout);
 relayout();
+try { if (sessionStorage.getItem(VIEW_KEY) === 'group') setView(true); } catch (e) {}
+}).catch(cpShowError);
 </script>
 </body>
 </html>

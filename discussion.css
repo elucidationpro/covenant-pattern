@@ -1,0 +1,38 @@
+/* Every slide is laid out in pixels on the presenter's 1920 × 1080 canvas. */
+.discussion-slide{--ink:#121820;--text:#ECE7DC;--muted:#93A0AE;box-sizing:border-box;position:absolute;inset:0;padding:90px 140px;display:flex;flex-direction:column;justify-content:center;gap:32px;background:var(--ink);color:var(--text);overflow:hidden}
+.discussion-slide[hidden]{display:none}
+body.board .discussion-slide,body.video .discussion-slide{visibility:hidden;pointer-events:none}
+.discussion-slide h1,.discussion-slide h2,.discussion-slide p,.discussion-slide blockquote{margin:0}
+.discussion-slide h1,.discussion-slide h2{font:500 72px/1.15 'Cormorant Garamond',Georgia,serif;text-wrap:balance}
+.discussion-slide.question h1{font:500 84px/1.2 Spectral,Georgia,serif}
+.discussion-slide blockquote{font:400 68px/1.4 Spectral,Georgia,serif;white-space:pre-wrap}
+.discussion-slide .subtitle,.discussion-slide .citation{font:500 32px/1.5 Figtree,sans-serif;color:var(--muted)}
+.discussion-slide .resource-body{font:400 48px/1.5 Spectral,Georgia,serif;white-space:pre-wrap}
+.discussion-slide .columns{columns:2;column-gap:96px;font-size:36px}
+.discussion-slide img{max-width:100%;max-height:702px;object-fit:contain;min-height:0}
+.passage-text{font:400 60px/1.45 Spectral,Georgia,serif}
+.discussion-slide .passage-text p + p{margin-top:26px}
+.passage-text .verse-number{font-size:32px;color:var(--muted);vertical-align:super;margin-right:9px}
+.passage-text strong{font-weight:600;color:var(--passage-accent)}
+.discussion-slide .resource-body p + p{margin-top:48px}
+.discussion-slide.instructions{padding:48px 140px;gap:20px;align-items:center;text-align:center}
+.discussion-slide.instructions h1{font-size:88px}
+.discussion-slide.instructions .eyebrow{font:600 24px Figtree,system-ui,sans-serif;letter-spacing:3px;text-transform:uppercase;color:rgb(242,196,92)}
+.discussion-slide.instructions .instructions-body{font:400 44px/1.3 Spectral,Georgia,serif;max-width:1400px}
+.discussion-slide .instructions-qr{box-sizing:border-box;width:520px;height:520px;border-radius:12px;padding:14px;flex-shrink:0;background:white}
+.discussion-slide.title{justify-content:flex-start;align-items:center;text-align:center;padding-top:70px;gap:24px;isolation:isolate}
+.discussion-slide.title h1{font-size:120px;max-width:1640px;line-height:1.05}
+.discussion-slide.title .subtitle{font-size:36px;color:var(--text)}
+.discussion-slide.title.has-bg::before{content:"";position:absolute;inset:0;z-index:-2;background:var(--title-bg) var(--title-position,center top)/cover no-repeat}
+.discussion-slide.title.has-bg::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(rgba(18,24,32,.65),transparent 65%)}
+.discussion-slide.title.has-bg h1,.discussion-slide.title.has-bg .subtitle{text-shadow:0 2px 18px rgba(0,0,0,.6)}
+.discussion-slide.title.dark-text h1,.discussion-slide.title.dark-text .subtitle{color:#1B2430;text-shadow:0 1px 18px rgba(255,255,255,.35)}
+.discussion-slide.title.dark-text::after{display:none}
+/* The artwork overlaps the copy region only along its transparent inner edge. */
+.discussion-slide.has-image{padding:0}
+.discussion-slide .slide-image{position:absolute;top:0;width:1152px;height:1080px;max-height:none;object-fit:cover}
+.discussion-slide.image-right .slide-image{right:0;mask-image:linear-gradient(to right,transparent,#000 40%);-webkit-mask-image:linear-gradient(to right,transparent,#000 40%)}
+.discussion-slide.image-left .slide-image{left:0;mask-image:linear-gradient(to left,transparent,#000 40%);-webkit-mask-image:linear-gradient(to left,transparent,#000 40%)}
+.discussion-slide .slide-copy{position:relative;z-index:1;width:864px;display:flex;flex-direction:column;gap:32px}
+.discussion-slide.image-right .slide-copy{margin-left:140px}
+.discussion-slide.image-left .slide-copy{margin-left:916px}

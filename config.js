@@ -4,4 +4,6 @@ window.CP_CONFIG = {
   supabaseUrl: 'https://bvkmcqvwhcudxnpqdenl.supabase.co',
   supabaseKey: 'sb_publishable_7Qlful4NW2ilfcMEZBiueg_GxZsYHHf',
   table: 'submissions',
+  publicUrl: 'https://elucidationpro.github.io/covenant-pattern/',
+  defaultLesson: 'jeremiah-1-20',
 };

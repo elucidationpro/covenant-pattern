@@ -75,3 +75,8 @@ input[type=text]{min-width:11em}
   .join img{display:none}
 }
 @media (prefers-reduced-motion:reduce){.w{transition:none}}
+
+/* Lesson-defined highlighting modes. */
+.mode[data-mode] .dot{background:var(--mode-color)}
+.mode[aria-pressed=true][data-mode]{background:var(--mode-color);border-color:var(--mode-color);color:var(--on-hi)}
+.mode[aria-pressed=true][data-mode] .dot{background:var(--on-hi)}

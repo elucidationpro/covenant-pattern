@@ -25,6 +25,10 @@
   .slide.hidden-slide{opacity:.5}
   .slide.hidden-slide.on{opacity:.85}
   .tap{cursor:pointer}
+  button.tap{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;padding:0}
+  .intro:empty{display:none}
+  .discussion .tools button[data-video]{display:none}
+  .discussion .slide.on .tools button[data-video]{display:inline-block}
   .tap:active{opacity:.8}
   .top{display:flex;align-items:baseline;gap:10px}
   .num{font-weight:700;font-size:12px;color:var(--muted);min-width:2.2em;letter-spacing:.04em;white-space:nowrap}
@@ -47,18 +51,30 @@
   .bar button.big{flex:1;background:var(--text);color:var(--ink);border-color:var(--text)}
   .bar button:disabled{opacity:.4}
   .bar .pos{color:var(--muted);font-size:14px;min-width:4em;text-align:center}
+  #boardPanel{position:fixed;inset:62px 0 calc(118px + env(safe-area-inset-bottom,0px));z-index:3;background:var(--ink);display:flex;flex-direction:column}
+  #boardPanel[hidden]{display:none}
+  #boardPanel .tools{padding:0 14px 10px}
+  #boardPreview{border:0;width:100%;flex:1;min-height:0}
+  .bar{z-index:4}
+  #boardToggle[aria-expanded=true]{border-color:var(--accent);color:var(--accent)}
+  @media(max-width:420px){.bar button{padding:.7em .8em}.bar .row{gap:6px}.bar .pos{min-width:3em;font-size:12px}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Walk in the Light of Your Fire</h1>
+  <h1 id="lessonTitle"></h1>
   <span class="now" id="now">Connecting…</span>
 </header>
 <div class="intro" id="intro"></div>
 <div class="list" id="list"></div>
+<section id="boardPanel" aria-label="Live highlight results" hidden>
+  <div class="tools"><button id="showBoard" class="play">Show on screen</button><button id="closeBoard">Close</button></div>
+  <iframe id="boardPreview" title="Live highlight results (read-only)"></iframe>
+</section>
 <div class="bar">
   <label class="toggle"><input type="checkbox" id="showHidden"> Show hidden slides <span id="hiddenCount"></span></label>
   <div class="row">
+    <button id="boardToggle" aria-expanded="false" aria-controls="boardPanel" hidden>Board</button>
     <button id="prev" aria-label="Previous">&#8592;</button>
     <span class="pos" id="posLabel"></span>
     <button class="big" id="next">Next &#8594;</button>
@@ -68,17 +84,41 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="shared.js"></script>
-<script src="notes-data.js"></script>
 <script>
+cpReady.then(() => {
 const sb = cpClient();
+const control = cpControl(sb);
 const SEQ = CP_SEQUENCE.map(s => s.pos);
 const VIDEO = CP_VIDEO;
-let pos = null, hidden = [], showHidden = localStorage.getItem('cp-show-hidden') === '1';
+const discussion = LESSON.type === 'discussion';
+if (discussion) document.body.classList.add('discussion');
+let pos = SEQ[0], hidden = [], showHidden = localStorage.getItem('cp-show-hidden:' + LESSON.slug) === '1';
+document.getElementById('lessonTitle').textContent = LESSON.title;
+document.title = LESSON.title + ' — Presenter Notes';
 const list = document.getElementById('list');
+const boardPanel = document.getElementById('boardPanel');
+const boardToggle = document.getElementById('boardToggle');
+// Deck remotes retain their existing controls; discussion boards get a private preview.
+boardToggle.hidden = !discussion || !SEQ.includes('board');
+function toggleBoard(open) {
+  boardPanel.hidden = !open;
+  boardToggle.setAttribute('aria-expanded', String(open));
+  if (open) {
+    const frame = document.getElementById('boardPreview');
+    if (!frame.getAttribute('src')) {
+      const url = new URL(cpURL('index.html'));
+      url.searchParams.set('view', 'preview');
+      frame.src = url.href;
+    }
+  } else boardToggle.focus();
+}
+boardToggle.onclick = () => toggleBoard(boardPanel.hidden);
+document.getElementById('closeBoard').onclick = () => toggleBoard(false);
+document.getElementById('showBoard').onclick = () => go('board');
 document.getElementById('showHidden').checked = showHidden;
 document.getElementById('intro').innerHTML = (window.CP_INTRO || []).map(l => `<p>${l.replace(/</g, '&lt;')}</p>`).join('');
 
-function labelFor(p) { return p === 'board' ? 'the board' : 'slide ' + p; }
+function labelFor(p) { return p === 'board' ? 'the board' : discussion ? CP_SEQUENCE.find(s => s.pos === p)?.label || p : 'slide ' + p; }
 function neighbor(d) {
   let i = SEQ.indexOf(pos);
   while (true) { i += d; if (i < 0 || i >= SEQ.length) return null; if (!hidden.includes(SEQ[i])) return SEQ[i]; }
@@ -87,18 +127,18 @@ function neighbor(d) {
 function renderList() {
   list.innerHTML = CP_SEQUENCE.filter(s => showHidden || !hidden.includes(s.pos)).map(s => {
     const isHidden = hidden.includes(s.pos);
-    const num = s.pos === 'board' ? 'BOARD' : 'SLIDE ' + s.pos;
-    const video = s.pos === VIDEO.pos ? `
+    const num = discussion ? String(CP_SEQUENCE.indexOf(s) + 1) : s.pos === 'board' ? 'BOARD' : 'SLIDE ' + s.pos;
+    const video = cpVideoFor(s.pos) ? `
       <button class="play" data-video="play">&#9654; Play clip</button>
       <button data-video="pause">&#10074;&#10074; Pause</button>
       <button data-video="restart">&#8635; Restart</button>` : '';
-    const esc = t => t.replace(/</g, '&lt;');
+    const esc = t => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     return `<div class="slide${s.pos === 'board' ? ' board' : ''}${isHidden ? ' hidden-slide' : ''}" data-pos="${s.pos}">
-      <div class="tap" data-go="${s.pos}">
+      <${discussion ? 'button' : 'div'} class="tap" data-go="${s.pos}">
         <div class="top"><span class="num">${num}${isHidden ? ' · HIDDEN' : ''}</span><span class="label">${esc(s.label)}</span></div>
         ${s.time ? `<div class="time">${esc(s.time)}</div>` : ''}
         <ul class="notes">${(s.bullets || []).map(b => `<li>${esc(b)}</li>`).join('')}</ul>
-      </div>
+      </${discussion ? 'button' : 'div'}>
       <div class="tools">${video}<button data-hide="${s.pos}">${isHidden ? 'Unhide' : 'Hide'}</button></div>
     </div>`;
   }).join('');
@@ -106,8 +146,10 @@ function renderList() {
 }
 
 function paint(scroll) {
-  document.querySelectorAll('.slide').forEach(el => el.classList.toggle('on', el.dataset.pos === pos));
-  document.getElementById('posLabel').textContent = pos === 'board' ? 'Board' : (pos ? `Slide ${pos}` : '');
+  document.querySelectorAll('.slide').forEach(el => {
+    el.classList.toggle('on', el.dataset.pos === pos);
+  });
+  document.getElementById('posLabel').textContent = discussion ? `${SEQ.indexOf(pos) + 1} / ${SEQ.length}` : pos === 'board' ? 'Board' : (pos ? `Slide ${pos}` : '');
   document.getElementById('prev').disabled = !neighbor(-1);
   document.getElementById('next').disabled = !neighbor(1);
   document.getElementById('hiddenCount').textContent = hidden.length ? `(${hidden.length})` : '';
@@ -118,20 +160,23 @@ function setNow(msg, err, sticky) { const n = document.getElementById('now'); n.
 
 async function go(p) {
   if (!SEQ.includes(p)) return;
-  pos = p; paint(false);
+  pos = p;
+  paint(false);
   setNow('Sending…');
-  const { error } = await sb.from('control').update({ position: p, updated_at: new Date().toISOString() }).eq('id', 1);
+  const { error } = await control.update({ position: p, updated_at: new Date().toISOString() });
   if (error) setNow('Not sent: ' + error.message, true); else setNow('Screen is on ' + labelFor(p));
 }
 async function saveHidden() {
   renderList();
-  const { error } = await sb.from('control').update({ hidden, updated_at: new Date().toISOString() }).eq('id', 1);
+  const { error } = await control.update({ hidden, updated_at: new Date().toISOString() });
   if (error) setNow('Not saved: ' + error.message, true);
 }
 async function video(cmd) {
-  if (pos !== VIDEO.pos) { pos = VIDEO.pos; paint(false); }
+  const VIDEO = discussion ? cpVideoFor(pos) : CP_VIDEO;
+  if (!VIDEO) return;
+  if (pos !== VIDEO?.pos) { pos = VIDEO?.pos; paint(false); }
   setNow('Sending…');
-  const { error } = await sb.from('control').update({ position: VIDEO.pos, video: { cmd, t: Date.now() }, updated_at: new Date().toISOString() }).eq('id', 1);
+  const { error } = await control.update({ position: VIDEO?.pos, video: { cmd, t: Date.now(), ...(discussion ? { pos } : {}) }, updated_at: new Date().toISOString() });
   if (error) setNow('Not sent: ' + error.message, true); else setNow({ play: 'Playing clip', pause: 'Clip paused', restart: 'Restarted clip' }[cmd], false, true);
 }
 
@@ -142,26 +187,25 @@ list.addEventListener('click', e => {
 });
 document.getElementById('prev').onclick = () => { const n = neighbor(-1); if (n) go(n); };
 document.getElementById('next').onclick = () => { const n = neighbor(1); if (n) go(n); };
-document.getElementById('showHidden').onchange = e => { showHidden = e.target.checked; localStorage.setItem('cp-show-hidden', showHidden ? '1' : '0'); renderList(); };
+document.getElementById('showHidden').onchange = e => { showHidden = e.target.checked; localStorage.setItem('cp-show-hidden:' + LESSON.slug, showHidden ? '1' : '0'); renderList(); };
 
 function applyRow(row, scroll) {
   let changed = false;
   if (Array.isArray(row.hidden)) { const h = row.hidden.map(String); if (JSON.stringify(h) !== JSON.stringify(hidden)) { hidden = h; changed = true; } }
-  if (row.position !== pos) { pos = row.position; changed = true; }
+  if (SEQ.includes(row.position) && row.position !== pos) { pos = row.position; changed = true; }
   if (changed) { renderList(); paint(scroll); }
   if (Date.now() - msgAt > 4000) setNow('Screen is on ' + labelFor(pos));
 }
 async function load(scroll) {
-  const { data, error } = await sb.from('control').select('position,hidden').eq('id', 1).single();
+  const { data, error } = await control.load();
   if (error) { setNow('Offline: ' + error.message, true); return; }
   applyRow(data, scroll);
 }
-sb.channel('control-notes')
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'control' }, payload => applyRow(payload.new, true))
-  .subscribe();
+control.subscribe('control-notes', () => load(true));
 renderList();
 load(true);
 setInterval(() => load(false), 4000);
+}).catch(cpShowError);
 </script>
 </body>
 </html>
