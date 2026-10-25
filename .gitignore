@@ -1,4 +1,9 @@
 .DS_Store
 
-# Licensed artwork: local only, never pushed
-weeks/*/img/local/
+# Keep unused local artwork out of deployments. Track the five Jeremiah slide images.
+weeks/*/img/local/*
+!weeks/jeremiah-1-20/img/local/carden.jpg
+!weeks/jeremiah-1-20/img/local/wilson.jpg
+!weeks/jeremiah-1-20/img/local/heaton.jpg
+!weeks/jeremiah-1-20/img/local/payne.jpg
+!weeks/jeremiah-1-20/img/local/carlton.jpg
