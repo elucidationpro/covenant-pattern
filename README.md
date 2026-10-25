@@ -11,7 +11,7 @@ Run locally: `python3 -m http.server 8080`, then open `http://localhost:8080/pre
 - `shared.js` — lesson loader, rendering, pagination, and realtime helpers. `styles.css` contains the shared palette and Spectral/Figtree theme. `config.js` contains the public Supabase credentials and `defaultLesson`.
 - `weeks/<slug>/lesson.js` — all lesson content; deck lessons also have `deck.html` and optional `presenter-notes.md` alongside it. `discussion.js` and `discussion.css` render and style discussion lessons.
 
-All four pages accept `?lesson=<slug>`. Without it, they use `CP_CONFIG.defaultLesson`, currently `isaiah-50-54`. Other query parameters are preserved in join links and embedded pages. Mode names are the keys in the selected lesson's colors:
+All four pages accept `?lesson=<slug>`. Without it, they use `CP_CONFIG.defaultLesson`, currently `jeremiah-1-20`. Other query parameters are preserved in join links and embedded pages. Mode names are the keys in the selected lesson's colors:
 
 - `highlight.html?mode=promise` still selects Isaiah's blue; `?mode=action` selects green.
 - `present.html?lesson=jeremiah-1-20` opens the discussion lesson.
@@ -56,16 +56,18 @@ Text fields are plain text; use newlines in `body` for paragraphs or verses. Scr
 
 The `items` array is the complete order, including title and board. `includeBoard` does not insert slides. Without a board item, the live board remains available through `index.html?lesson=<slug>` and participant Group view.
 
+When the live board is on screen, the remote includes Previous verses / Next verses buttons to page the projected board without leaving the slide.
+
 Discussion remotes show a flat list numbered 1–N with short content labels. Tap a slide to present it. Prev/Next skips hidden slides; Show hidden slides reveals Unhide controls. Video controls appear on the active video slide. Click the laptop screen once to arm video audio. Discussion lessons have no timer or question/resource breadcrumbs.
 
 Remotes with a board item include a **Board** button for a private, read-only live heatmap. **Show on screen** presents the ordered board slide; opening or closing the preview never navigates the presenter.
 
 ## Data and one-time migration
 
-The existing public Supabase `submissions` table needs a nullable text column named `lesson`. Backfill existing rows with `isaiah-50-54` before using this version. No SQL or database changes are performed by this repository. Keep the existing unique/primary key on `device_id`; each phone generates an independent UUID per week, so no composite unique constraint is required. Existing Isaiah phone drafts/device IDs migrate from the old local storage key.
+The existing public Supabase `submissions` table needs a nullable text column named `lesson`. Backfill existing rows with `isaiah-50-54` before using this version. No SQL or database changes are performed by this repository. Upserts require a unique constraint on `(device_id, lesson)`, matching the deployed schema. Existing Isaiah phone drafts/device IDs migrate from the old local storage key.
 
 Every written row includes `lesson`; reads, realtime subscriptions, and resets are filtered to it. Realtime still requires the table's existing publication setup. Polling remains a fallback, including for deletes.
 
-Presenter state uses four reserved UUID rows per lesson in `submissions`, storing position, hidden slides, video command, and active screen in `marks.value`. Separate rows keep concurrent updates to different fields from overwriting each other. These rows are excluded from board counts and Reset. This avoids another schema migration: the old single-row `control` table is no longer used or modified. Its current position/hidden settings are not migrated; each lesson starts at slide 1 with no hidden slides. The most recently opened presenter screen takes control only for its own lesson.
+Presenter state uses five reserved UUID rows per lesson in `submissions`, storing position, hidden slides, video command, active screen, and board paging commands in `marks.value`. Separate rows keep concurrent updates to different fields from overwriting each other. These rows are excluded from board counts and Reset. This avoids another schema migration: the old single-row `control` table is no longer used or modified. Its current position/hidden settings are not migrated; each lesson starts at slide 1 with no hidden slides. The most recently opened presenter screen takes control only for its own lesson.
 
 Serve over HTTPS (or localhost) for browser crypto support. This remains a public classroom activity, not a secure host/admin system.

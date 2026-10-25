@@ -174,7 +174,7 @@ window.cpReady = new Promise((resolve, reject) => {
       // Stable UUIDs also work when device_id is a UUID column. Separate fields
       // prevent simultaneous screen claims and remote navigation overwriting each other.
       window.CP_CONTROL_IDS = {};
-      for (const field of ['position', 'hidden', 'video', 'screen']) {
+      for (const field of ['position', 'hidden', 'video', 'screen', 'board']) {
         const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('cp-control:' + slug + ':' + field)));
         bytes[6] = (bytes[6] & 15) | 80; bytes[8] = (bytes[8] & 63) | 128;
         const hex = Array.from(bytes.slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');

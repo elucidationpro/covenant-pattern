@@ -46,6 +46,9 @@
   .toggle{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:0 2px 8px}
   .toggle input{width:16px;height:16px;accent-color:var(--accent);margin:0}
   .bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:8px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+  .bar .row[hidden]{display:none}
+  body:has(#boardPaging:not([hidden])){padding-bottom:210px}
+  body:has(#boardPaging:not([hidden])) #boardPanel{bottom:calc(190px + env(safe-area-inset-bottom,0px))}
   .bar .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
   .bar button{font:600 16px Figtree,system-ui,sans-serif;background:transparent;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:.7em 1.3em;cursor:pointer}
   .bar button.big{flex:1;background:var(--text);color:var(--ink);border-color:var(--text)}
@@ -73,6 +76,10 @@
 </section>
 <div class="bar">
   <label class="toggle"><input type="checkbox" id="showHidden"> Show hidden slides <span id="hiddenCount"></span></label>
+  <div id="boardPaging" class="row" style="margin-bottom:8px" hidden>
+    <button id="boardPrev">← Previous verses</button>
+    <button id="boardNext">Next verses →</button>
+  </div>
   <div class="row">
     <button id="boardToggle" aria-expanded="false" aria-controls="boardPanel" hidden>Board</button>
     <button id="prev" aria-label="Previous">&#8592;</button>
@@ -146,6 +153,7 @@ function renderList() {
 }
 
 function paint(scroll) {
+  document.getElementById('boardPaging').hidden = pos !== 'board';
   document.querySelectorAll('.slide').forEach(el => {
     el.classList.toggle('on', el.dataset.pos === pos);
   });
@@ -185,6 +193,12 @@ list.addEventListener('click', e => {
   const v = e.target.closest('[data-video]'); if (v) { video(v.dataset.video); return; }
   const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go);
 });
+async function pageBoard(direction) {
+  const { error } = await control.update({ board: { direction, t: Date.now() } });
+  if (error) setNow('Not sent: ' + error.message, true);
+}
+document.getElementById('boardPrev').onclick = () => pageBoard(-1);
+document.getElementById('boardNext').onclick = () => pageBoard(1);
 document.getElementById('prev').onclick = () => { const n = neighbor(-1); if (n) go(n); };
 document.getElementById('next').onclick = () => { const n = neighbor(1); if (n) go(n); };
 document.getElementById('showHidden').onchange = e => { showHidden = e.target.checked; localStorage.setItem('cp-show-hidden:' + LESSON.slug, showHidden ? '1' : '0'); renderList(); };
