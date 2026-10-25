@@ -47,15 +47,19 @@ window.cpRenderDiscussion = function (host, slide) {
         if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
         else merged.push(range);
       });
-      let offset = 0;
-      for (const [start, end] of merged) {
-        verse.append(document.createTextNode(text.slice(offset, start)));
-        const emphasis = document.createElement('strong');
-        emphasis.textContent = text.slice(start, end);
-        verse.appendChild(emphasis);
-        offset = end;
-      }
-      verse.append(document.createTextNode(text.slice(offset)));
+      // Word spans share the highlighter's ids (passage:verse:wordIndex) so live group highlights can be painted here.
+      const heat = window.cpHeat;
+      const words = text.split(' ');
+      let at = 0;
+      words.forEach((word, i) => {
+        const span = document.createElement(merged.some(([s, e]) => at < e && at + word.length > s) ? 'strong' : 'span');
+        span.className = 'w';
+        span.textContent = word + (i < words.length - 1 ? ' ' : '');
+        const d = heat && heat.decorate(`${slide.passage}:${n}:${i}`);
+        if (d && d.style) { span.setAttribute('style', d.style); if (d.cls) span.classList.add(d.cls); }
+        verse.appendChild(span);
+        at += word.length + 1;
+      });
       reading.appendChild(verse);
     }
   } else if (slide.kind === 'instructions') {

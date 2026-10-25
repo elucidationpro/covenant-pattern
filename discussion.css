@@ -36,3 +36,6 @@ body.board .discussion-slide,body.video .discussion-slide{visibility:hidden;poin
 .discussion-slide .slide-copy{position:relative;z-index:1;width:760px;display:flex;flex-direction:column;gap:32px}
 .discussion-slide.image-right .slide-copy{margin-left:140px}
 .discussion-slide.image-left .slide-copy{margin-left:1020px}
+
+.passage-text .w{border-radius:.18em;padding:.02em 0;box-decoration-break:clone;-webkit-box-decoration-break:clone;transition:background-color .25s,color .25s}
+.passage-text .w.dark{color:#10151C}

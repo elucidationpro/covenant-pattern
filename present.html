@@ -93,6 +93,41 @@ function paintNav() {
   document.getElementById('back').disabled = !b; document.getElementById('fwd').disabled = !f;
 }
 
+/* Live group highlights painted onto passage slides (same tally and intensity as the board). */
+if (discussion) {
+  const controlIds = Object.values(CP_CONTROL_IDS);
+  let heatSig = '';
+  const loadHeat = async () => {
+    const { data, error } = await sb.from(CP_CONFIG.table).select('device_id,marks').eq('lesson', LESSON.slug);
+    if (error) return;
+    const rows = (data || []).filter(r => !controlIds.includes(r.device_id));
+    const sig = JSON.stringify(rows.map(r => [r.device_id, r.marks]));
+    if (sig === heatSig) return;
+    heatSig = sig;
+    const tally = {};
+    for (const r of rows) for (const [id, m] of Object.entries(r.marks || {})) {
+      if (!CP_COLORS[m]) continue;
+      (tally[id] ||= Object.fromEntries(CP_MODES.map(k => [k, 0])))[m]++;
+    }
+    const people = rows.length;
+    const alphaFor = c => Math.min(1, 0.22 + 0.78 * ((c - 1) / Math.max(people - 1, 4)));
+    window.cpHeat = { decorate(id) {
+      const t = tally[id]; if (!t) return null;
+      const kind = CP_MODES.reduce((b, k) => t[k] > t[b] ? k : b);
+      if (!t[kind]) return null;
+      const a = alphaFor(t[kind]);
+      return { cls: a > 0.5 ? 'dark' : '', style: `background:rgba(${CP_COLORS[kind].rgb},${a.toFixed(2)})` };
+    } };
+    const cur = CP_SEQUENCE.find(s => s.pos === pos);
+    if (cur && cur.kind === 'passage') cpRenderDiscussion(surface, cur);
+  };
+  sb.channel('passage-heat-' + LESSON.slug)
+    .on('postgres_changes', { event: '*', schema: 'public', table: CP_CONFIG.table, filter: 'lesson=eq.' + LESSON.slug }, loadHeat)
+    .subscribe();
+  setInterval(loadHeat, 5000);
+  loadHeat();
+}
+
 /* Show a position on screen. */
 function apply(p, { fromRemote = false } = {}) {
   if (!SEQ.includes(p) || p === pos) return;
