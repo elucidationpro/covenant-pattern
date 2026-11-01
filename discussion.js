@@ -3,6 +3,8 @@ window.cpRenderDiscussion = function (host, slide) {
   host.replaceChildren();
   host.removeAttribute('style');
   host.className = 'discussion-slide ' + (slide.kind || '');
+  Object.entries(LESSON.theme || {}).forEach(([k, v]) => host.style.setProperty(k, v));
+  if (LESSON.fontSet) host.classList.add('font-' + LESSON.fontSet);
   const add = (tag, text, cls) => {
     const el = document.createElement(tag);
     el.textContent = text || '';
@@ -17,15 +19,46 @@ window.cpRenderDiscussion = function (host, slide) {
     }
     host.style.setProperty('--title-position', LESSON.titleImagePosition || 'center top');
     host.classList.toggle('dark-text', LESSON.titleTheme === 'dark-text');
+    host.classList.toggle('split', LESSON.titleLayout === 'split');
     add('h1', LESSON.title);
     add('p', LESSON.subtitle, 'subtitle');
   } else if (slide.kind === 'question') {
     add('h1', slide.text);
+  } else if (slide.kind === 'scripture' && Array.isArray(slide.verses)) {
+    // Static scripture with verse numbers; emphasis phrases match case-insensitively.
+    host.style.setProperty('--passage-accent', `rgb(${LESSON.colors[0].rgb})`);
+    add('h1', slide.title);
+    const reading = add('div', '', 'passage-text');
+    if (slide.verses.reduce((t, v) => t + v[1].length, 0) > 380) reading.classList.add('compact');
+    for (const [n, text] of slide.verses) {
+      const verse = document.createElement('p');
+      const number = document.createElement('span');
+      number.className = 'verse-number';
+      number.textContent = n + ' ';
+      verse.appendChild(number);
+      let rest = text;
+      const phrases = (slide.emphasis || []).map(e => e.toLowerCase());
+      while (rest.length) {
+        let best = -1, len = 0;
+        for (const ph of phrases) { const i = rest.toLowerCase().indexOf(ph); if (i !== -1 && (best === -1 || i < best)) { best = i; len = ph.length; } }
+        if (best === -1) { verse.appendChild(document.createTextNode(rest)); break; }
+        if (best) verse.appendChild(document.createTextNode(rest.slice(0, best)));
+        const strong = document.createElement('strong'); strong.textContent = rest.slice(best, best + len); verse.appendChild(strong);
+        rest = rest.slice(best + len);
+      }
+      reading.appendChild(verse);
+    }
   } else if (slide.kind === 'passage') {
     host.style.setProperty('--passage-accent', `rgb(${LESSON.colors[0].rgb})`);
     add('h1', slide.ref);
     const reading = add('div', '', 'passage-text');
     const verses = LESSON.passages[slide.passage].verses.filter(([n]) => n >= slide.from && n <= slide.to);
+    if (LESSON.passages[slide.passage].source) {
+      reading.innerHTML = LESSON.passages[slide.passage].verses
+        .filter(([n, , kind]) => kind === 'message' || (n >= (slide.from ?? 0) && n <= (slide.to ?? Infinity)))
+        .map(v => verseHTML(slide.passage, v, window.cpHeat?.decorate)).join('');
+      return;
+    }
     for (const [n, text] of verses) {
       const verse = document.createElement('p');
       const number = document.createElement('span');

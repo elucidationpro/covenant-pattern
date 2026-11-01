@@ -56,3 +56,4 @@ Project `covenant-pattern`, id `bvkmcqvwhcudxnpqdenl`. Table `public.submissions
 ## Lesson log
 - 2026-10 Isaiah 50–54 (`isaiah-50-54`): deck lesson, two-color covenant highlighter (what we do / what He promises). Class loved the highlighting.
 - 2026-10-25 Jeremiah 1:1–10 (`jeremiah-1-20`): discussion lesson. Theme: God knew us before we were born. Flow: reflection, name of Jeremiah, QR + live highlight board, then 4–5 / 6–8 / 9–10 each followed by a question (impact of this truth, setting aside fears, your mission).
+- 2026-11-01 Jeremiah 31; Lamentations (`jeremiah-31-lam`): discussion lesson, theme mourning into joy / God takes what we expected and changes what it means. Song highlight activity: lyrics load from Supabase `lesson_content` (never in repo), word-level, scrollable participant view; song plays from Jeremy's phone. Per-lesson `theme`, `fontSet: 'modern'` (Montserrat/Raleway), `titleLayout: 'split'`.

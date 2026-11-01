@@ -39,3 +39,21 @@ body.board .discussion-slide,body.video .discussion-slide{visibility:hidden;poin
 
 .passage-text .w{border-radius:.18em;padding:.02em 0;box-decoration-break:clone;-webkit-box-decoration-break:clone;transition:background-color .25s,color .25s}
 .passage-text .w.dark{color:#10151C}
+
+/* Split title: portrait artwork anchored right, fading into a painted ground on the left. */
+.discussion-slide.title.split{justify-content:center;align-items:flex-start;text-align:left;padding:0 0 120px 140px;background:var(--title-ground,var(--ink))}
+.discussion-slide.title.split.has-bg::before{background:var(--title-bg) right center/auto 100% no-repeat;-webkit-mask-image:linear-gradient(to right,transparent 54%,#000 76%);mask-image:linear-gradient(to right,transparent 54%,#000 76%)}
+.discussion-slide.title.split.has-bg::before{z-index:-1}
+.discussion-slide.title.split.has-bg::after{display:block;z-index:-2;background:var(--title-bg) right center/auto 100% no-repeat;filter:blur(36px) saturate(1.05);transform:scale(1.08);transform-origin:right center;-webkit-mask-image:linear-gradient(to right,transparent 30%,#000 62%);mask-image:linear-gradient(to right,transparent 30%,#000 62%)}
+.discussion-slide.title.split h1{max-width:1000px;font-size:118px;line-height:1.04}
+.discussion-slide.title.split .subtitle{max-width:900px}
+.discussion-slide.title.split.dark-text h1{color:var(--title-text,#1B2430);text-shadow:none}
+.discussion-slide.title.split.dark-text .subtitle{color:var(--title-muted,#4a3a33);text-shadow:none}
+
+/* Modern font set: Montserrat headings, Raleway reading text. */
+.discussion-slide.font-modern h1,.discussion-slide.font-modern h2{font-family:Montserrat,Figtree,sans-serif;font-weight:600;letter-spacing:-.01em}
+.discussion-slide.font-modern.title h1{font-weight:700;letter-spacing:-.02em;line-height:1.08}
+.discussion-slide.font-modern.question h1{font:500 76px/1.25 Montserrat,Figtree,sans-serif}
+.discussion-slide.font-modern .resource-body,.discussion-slide.font-modern blockquote,.discussion-slide.font-modern .passage-text,.discussion-slide.font-modern .instructions-body{font-family:Raleway,Figtree,sans-serif;font-weight:500}
+.discussion-slide.font-modern .subtitle,.discussion-slide.font-modern .citation,.discussion-slide.font-modern .eyebrow{font-family:Montserrat,Figtree,sans-serif}
+.discussion-slide .passage-text.compact{font-size:50px}

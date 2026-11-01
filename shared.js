@@ -1,12 +1,34 @@
 /* Shared lesson loading, verse rendering, pagination, and realtime helpers. */
 /* Build one verse. `decorate(id)` returns {cls, style} for each word. */
-window.verseHTML = function (p, [n, text], decorate) {
+window.cpEscapeHTML = text => String(text).replace(/[&<>"']/g, c => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+})[c]);
+
+// Physical line numbers keep repeated lines distinct across all three surfaces.
+window.cpContentLines = function (body) {
+  if (!body || !body.trim()) return [[0, 'Lyrics not loaded yet', 'message']];
+  return body.replace(/\r\n?/g, '\n').split('\n').map((line, i) => {
+    const text = line.trim();
+    return [i + 1, text, !text ? 'break' : /^\[.*\]$/.test(text) ? 'label' : 'line'];
+  });
+};
+
+window.verseHTML = function (p, [n, text, kind], decorate) {
+  if (kind === 'break') return '<p class="verse lyric-break" aria-hidden="true"></p>';
+  if (kind === 'label' || kind === 'message') return `<p class="verse lyric-${kind}">${cpEscapeHTML(text)}</p>`;
+  if (kind === 'line') {
+    const lw = text.split(/\s+/);
+    return '<p class="verse lyric-line">' + lw.map((w, i) => {
+      const id = `${p}:${n}:${i}`, d = decorate ? decorate(id) : {};
+      return `<span class="w ${d.cls || ''}" data-id="${id}"${d.style ? ` style="${d.style}"` : ''}>${cpEscapeHTML(w)}${i < lw.length - 1 ? ' ' : ''}</span>`;
+    }).join('') + '</p>';
+  }
   const words = text.split(' ');
   return `<p class="verse"><span class="vn">${n}</span>` + words.map((w, i) => {
     const id = `${p}:${n}:${i}`;
     const d = decorate ? decorate(id) : { cls: '', style: '' };
     const sp = i < words.length - 1 ? ' ' : '';
-    return `<span class="w ${d.cls || ''}" data-id="${id}"${d.style ? ` style="${d.style}"` : ''}>${w}${sp}</span>`;
+    return `<span class="w ${d.cls || ''}" data-id="${id}"${d.style ? ` style="${d.style}"` : ''}>${cpEscapeHTML(w)}${sp}</span>`;
   }).join('') + '</p>';
 };
 
@@ -50,6 +72,7 @@ window.pageHTML = function (passageKey, page, decorate) {
 
 window.refLabel = function (passageKey, page) {
   const P = window.PASSAGES[passageKey];
+  if (P.source) return P.title;
   const vs = [].concat(...page);
   const a = vs[0]?.[0], b = vs[vs.length - 1]?.[0];
   return `${P.title}${a ? ':' + a + (b !== a ? '–' + b : '') : ''}`;
@@ -100,6 +123,33 @@ window.cpReady = new Promise((resolve, reject) => {
           l.colors.some(c => !/^[a-z][a-z0-9-]*$/.test(c.key) || !/^\d{1,3},\s*\d{1,3},\s*\d{1,3}$/.test(c.rgb))) {
         throw new Error('Invalid lesson definition.');
       }
+      await Promise.all(Object.values(l.passages).map(async passage => {
+        if (!passage.source) return;
+        if (passage.source.table !== 'lesson_content' || typeof passage.source.key !== 'string') {
+          throw new Error('Unsupported passage source.');
+        }
+        passage.verses = cpContentLines('');
+        try {
+          const { data, error } = await cpClient().from('lesson_content').select('title,body')
+            .eq('lesson', slug).eq('key', passage.source.key).maybeSingle();
+          if (error) throw error;
+          passage.verses = cpContentLines(data?.body);
+          if (data?.title) passage.title = data.title;
+        } catch (error) {
+          passage.verses = [[0, 'Lyrics could not be loaded. Refresh to try again.', 'message']];
+        }
+      }));
+      if (l.fontsHref) try {
+        if (!document.querySelector('link[data-lesson-fonts]')) {
+          const fl = document.createElement('link');
+          fl.rel = 'stylesheet'; fl.href = l.fontsHref; fl.setAttribute('data-lesson-fonts', '');
+          document.head.appendChild(fl);
+        }
+      } catch (e) { /* fonts are cosmetic */ }
+      if (l.theme) try {
+        Object.entries(l.theme).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+        if (l.theme['--ink']) document.documentElement.style.background = l.theme['--ink'];
+      } catch (e) { /* theme is cosmetic */ }
       window.PASSAGES = l.passages;
       window.CP_COLORS = Object.fromEntries(l.colors.map(c => [c.key, c]));
       window.CP_MODES = l.colors.map(c => c.key);
@@ -124,8 +174,8 @@ window.cpReady = new Promise((resolve, reject) => {
           positions.add(pos);
           if (item.kind === 'passage') {
             const { passage, from, to } = item;
-            if (!l.passages[passage] || !Number.isInteger(from) || !Number.isInteger(to) || from > to ||
-                !l.passages[passage].verses.some(v => v[0] === from) || !l.passages[passage].verses.some(v => v[0] === to)) {
+            if (!l.passages[passage] || (!l.passages[passage].source && (!Number.isInteger(from) || !Number.isInteger(to) || from > to ||
+                !l.passages[passage].verses.some(v => v[0] === from) || !l.passages[passage].verses.some(v => v[0] === to)))) {
               throw new Error('Passage items must name an existing passage and verse range.');
             }
           }

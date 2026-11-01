@@ -66,10 +66,33 @@ Remotes with a board item include a **Board** button for a private, read-only li
 
 ## Data and one-time migration
 
-The existing public Supabase `submissions` table needs a nullable text column named `lesson`. Backfill existing rows with `isaiah-50-54` before using this version. No SQL or database changes are performed by this repository. Upserts require a unique constraint on `(device_id, lesson)`, matching the deployed schema. Existing Isaiah phone drafts/device IDs migrate from the old local storage key.
+The existing public Supabase `submissions` table needs a nullable text column named `lesson`. Backfill existing rows with `isaiah-50-54` before using this version. Database changes are applied separately using the SQL editor. Upserts require a unique constraint on `(device_id, lesson)`, matching the deployed schema. Existing Isaiah phone drafts/device IDs migrate from the old local storage key.
 
 Every written row includes `lesson`; reads, realtime subscriptions, and resets are filtered to it. Realtime still requires the table's existing publication setup. Polling remains a fallback, including for deletes.
 
 Presenter state uses five reserved UUID rows per lesson in `submissions`, storing position, hidden slides, video command, active screen, and board paging commands in `marks.value`. Separate rows keep concurrent updates to different fields from overwriting each other. These rows are excluded from board counts and Reset. This avoids another schema migration: the old single-row `control` table is no longer used or modified. Its current position/hidden settings are not migrated; each lesson starts at slide 1 with no hidden slides. The most recently opened presenter screen takes control only for its own lesson.
 
 Serve over HTTPS (or localhost) for browser crypto support. This remains a public classroom activity, not a secure host/admin system.
+
+## Song passages loaded at runtime
+
+Run `supabase/lesson_content.sql` once in project `bvkmcqvwhcudxnpqdenl`.
+A passage may replace `verses` with `source: { table: 'lesson_content', key: 'song' }`.
+The shared loader fetches the matching lesson slug and key before rendering on the
+participant, board, presenter, and remote pages. Lyrics are never stored in the repo
+or browser drafts; drafts contain only highlight IDs. Reload after editing content.
+
+Each non-empty lyric line is one highlight target. Blank lines create spacing;
+`[Chorus]`-style labels are muted and unselectable. Repeated lines have separate IDs.
+Missing or cleared bodies show “Lyrics not loaded yet”; request errors show a retry
+message. Physical line numbers form IDs, so reset the lesson highlights after changing
+line order or text. Source-backed passage slides may omit `from` and `to`, or use
+physical line numbers to show a range. Use the paginated board for the full song.
+
+The `jeremiah-31-lam` scaffold is available by explicit lesson URL; the default week
+is unchanged. The official Josiah Queen / Gable Price audio is configured as a `video` item
+for the existing phone remote playback controls. Paste lyrics into the
+Supabase row with lesson `jeremiah-31-lam`, key `song`, and title `Thief in the Night`.
+After class, delete the row or clear its body. Never put lyrics in source files.
+
+Check the loader with `node --test tests/content.test.cjs`.

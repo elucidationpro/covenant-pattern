@@ -9,6 +9,10 @@
 <link rel="stylesheet" href="styles.css">
 <style>
   .verses{--vsize:clamp(20px,2.6vw,44px)}
+  /* Scroll instead of paging: vertical swipe scrolls, tap or sideways drag highlights. */
+  #verses{overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-bottom:40vh}
+  #verses > .verse{flex-shrink:0}
+  .pager{display:none!important}
   .app{height:100dvh}
   .view-header{position:sticky;top:0;z-index:2;flex:none;background:var(--ink);border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
   .view-toggle{display:flex;max-width:440px;margin:auto;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
@@ -43,7 +47,7 @@
     <div class="modes" role="group" aria-label="Highlight type"></div>
     <div class="extras">
       <select id="passage" aria-label="Passage"></select>
-      <button class="ghost" id="clear">Clear page</button>
+      <button class="ghost" id="clear">Clear all</button>
       <span class="status" id="status" role="status"></span>
       <button class="switch-live" id="toLive">Switch to live view &#8594;</button>
     </div>
@@ -63,7 +67,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js?v=20261025-2"></script>
+<script src="shared.js?v=20261101-1"></script>
 <script>
 cpReady.then(() => {
 const $ = id => document.getElementById(id);
@@ -97,6 +101,7 @@ function render() {
   const pg = state.pages[state.page] || [];
   $('verses').innerHTML = pageHTML(state.passage, pg, decorate);
   $('ref').textContent = refLabel(state.passage, pg);
+  $('hint').textContent = 'Tap or drag across words to highlight';
   $('count').textContent = `${state.page + 1} / ${state.pages.length}`;
   $('prev').disabled = state.page === 0;
   $('next').disabled = state.page >= state.pages.length - 1;
@@ -104,9 +109,9 @@ function render() {
 }
 function relayout() {
   if (groupView) return;
-  const box = $('verses'), cols = colsFor(box);
-  box.classList.toggle('cols', cols > 1);
-  state.pages = paginate(state.passage, box, $('measure'), decorate, cols);
+  const box = $('verses');
+  box.classList.remove('cols');
+  state.pages = [[PASSAGES[state.passage].verses]];
   if (state.page > state.pages.length - 1) state.page = Math.max(0, state.pages.length - 1);
   render();
 }
@@ -127,20 +132,32 @@ function applyTo(el) {
   save(); markDirty();
 }
 const vbox = $('verses');
+// Touch: a vertical swipe scrolls (browser cancels the pointer), a tap or sideways drag highlights.
+let pending = null;
 vbox.addEventListener('pointerdown', e => {
   if (groupView) return;
   const el = e.target.closest('.w'); if (!el) return;
   const cur = state.marks[el.dataset.id];
-  painting = cur === state.mode ? 'remove' : 'add';
-  applyTo(el); e.preventDefault();
+  const mode = cur === state.mode ? 'remove' : 'add';
+  if (e.pointerType === 'mouse') { painting = mode; applyTo(el); e.preventDefault(); return; }
+  pending = { el, mode, x: e.clientX, y: e.clientY };
 });
 window.addEventListener('pointermove', e => {
+  if (pending) {
+    const dx = Math.abs(e.clientX - pending.x), dy = Math.abs(e.clientY - pending.y);
+    if (dx > 8 && dx > dy) { painting = pending.mode; applyTo(pending.el); pending = null; }
+    else if (dy > 8) { pending = null; }
+    return;
+  }
   if (!painting) return;
   const el = document.elementFromPoint(e.clientX, e.clientY);
   if (el && el.closest) applyTo(el.closest('.w'));
 });
-window.addEventListener('pointerup', () => { painting = null; });
-window.addEventListener('pointercancel', () => { painting = null; });
+window.addEventListener('pointerup', () => {
+  if (pending) { painting = pending.mode; applyTo(pending.el); pending = null; }
+  painting = null;
+});
+window.addEventListener('pointercancel', () => { painting = null; pending = null; });
 
 // Keep the editor mounted so switching views never replaces the local draft.
 // The remote uses this same board preview, including its realtime subscription.
@@ -166,7 +183,7 @@ $('groupTab').onclick = () => setView(true);
 $('toLive').onclick = () => setView(true);
 $('toHighlight').onclick = () => setView(false);
 
-function go(d) { const n = state.page + d; if (n < 0 || n >= state.pages.length) return; state.page = n; render(); }
+function go(d) { $('verses').scrollBy({ top: d * $('verses').clientHeight * 0.8, behavior: 'smooth' }); return; const n = state.page + d; if (n < 0 || n >= state.pages.length) return; state.page = n; render(); }
 $('prev').onclick = () => go(-1); $('next').onclick = () => go(1);
 $('passage').onchange = e => { state.passage = e.target.value; state.page = 0; save(); relayout(); };
 $('clear').onclick = () => {

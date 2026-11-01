@@ -80,3 +80,7 @@ input[type=text]{min-width:11em}
 .mode[data-mode] .dot{background:var(--mode-color)}
 .mode[aria-pressed=true][data-mode]{background:var(--mode-color);border-color:var(--mode-color);color:var(--on-hi)}
 .mode[aria-pressed=true][data-mode] .dot{background:var(--on-hi)}
+
+/* Remote content uses whole lines, with unpaintable section markers. */
+.lyric-label,.lyric-message{color:var(--muted);font-family:var(--ui);font-size:.6em}
+.lyric-break{min-height:.65em;flex-shrink:0}
