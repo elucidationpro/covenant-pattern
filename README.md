@@ -2,7 +2,9 @@
 
 A reusable, no-build Sunday School activity. Everyone highlights scripture on their phone, and the live board shows where the group agrees. More votes make a word's color stronger.
 
-Run locally: `python3 -m http.server 8080`, then open `http://localhost:8080/present.html`.
+Agents: read AGENTS.md first.
+
+Run locally: `python3 tools/serve.py`, then open `http://localhost:8080/present.html`.
 
 - `index.html` — live board, lesson-specific join link/QR, passage picker, and Reset (confirms before deleting only this week's highlights).
 - `highlight.html` — phone highlighter. Tap or drag words; marks and removals save automatically after about 400ms. Each save replaces that device's highlights for that week, including clearing all marks. A small Saved indicator confirms sync. Drafts and device IDs are stored separately per lesson. The sticky Highlight / Group view toggle opens the same read-only live board preview as the remote. Switching views preserves edits, and the selected view is remembered per lesson for the browser session.
@@ -48,7 +50,7 @@ items: [
 ],
 ```
 
-Allowed kinds are `title`, `question`, `passage`, `instructions`, `board`, `text`, `quote`, `scripture`, `video`, and `image`. Questions may have `image` and `imageCaption`. Passage slides read the inclusive `from`/`to` range from `passages`; literal `emphasis` phrases use the first lesson color. Instructions show only the heading, a large QR code when `qr: true`, and its join URL. They do not render body text.
+Allowed kinds are `title`, `question`, `passage`, `instructions`, `board`, `text`, `quote`, `scripture`, `video`, and `image`. Questions and text slides may have `image`, `imageSide` (`left`/`right`) and `imagePosition`; the image fills one side and fades into the background. Captions are not shown. Passage slides read the inclusive `from`/`to` range from `passages`; literal `emphasis` phrases use the first lesson color. Instructions show an optional `eyebrow`, the `heading`, optional `body`, and a large QR code when `qr: true` (always pointing at `CP_CONFIG.publicUrl`).
 
 Use unique, stable lowercase letters/numbers/hyphens for item IDs. Title and board IDs may be omitted; use at most one of each. Position keys retain the existing prefixes (`q-` for questions, `r-` for text/quote/scripture/video/image, `passage-` and `instructions-`); title stays `1` and board stays `board`. Keep IDs and kinds when reordering so saved hide state stays attached to the same slide.
 
